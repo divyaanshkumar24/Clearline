@@ -19,6 +19,9 @@ DIARIZATION_MODEL = "pyannote/speaker-diarization-3.1"
 _GATED_MODEL_PAGES = [
     "https://huggingface.co/pyannote/speaker-diarization-3.1",
     "https://huggingface.co/pyannote/segmentation-3.0",
+    # pyannote.audio 4.x's speaker-diarization-3.1 pipeline pulls its embedding
+    # model from this repo too — also gated, also needs terms accepted.
+    "https://huggingface.co/pyannote/speaker-diarization-community-1",
 ]
 
 _diarization_pipeline = None
@@ -49,7 +52,7 @@ def _load_diarization_pipeline():
         )
 
     try:
-        pipeline = Pipeline.from_pretrained(DIARIZATION_MODEL, use_auth_token=hf_token)
+        pipeline = Pipeline.from_pretrained(DIARIZATION_MODEL, token=hf_token)
     except Exception as exc:
         raise RuntimeError(f"{_gated_terms_message()}\n\nOriginal error: {exc}") from exc
 

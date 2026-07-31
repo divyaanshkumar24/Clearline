@@ -201,6 +201,31 @@ Output shape:
 - `analyze_call()` (`analyze.py`) runs all of the above and returns the full
   Stage 3 schema shown here.
 
+## Evaluation harness
+
+`src/evaluate.py` runs the full pipeline over every audio file in
+`sample_audio/` and writes a markdown quality-summary table:
+
+```bash
+python -m src.evaluate
+python -m src.evaluate --sample-audio-dir some/other/dir --output some/table.md
+```
+
+For each call it reports: transcript word count, number of speakers detected,
+whether a pivot point was found, and the recommendation's `repair_suggestion`
+(truncated to one line). If a file `<call_id>_reference.txt` exists next to
+the audio (e.g. `sample_audio/call_042_reference.txt` for `call_042.wav`),
+it's treated as a manually-transcribed reference transcript and word error
+rate (via `jiwer`, after lowercasing/punctuation-stripping both sides) is
+added to that row. Calls without a reference get `—` in the WER column, and
+the table's final line explicitly lists which `call_id`s that applies to —
+so a missing reference reads as "not covered yet," never as a silent zero.
+A call that fails partway through the pipeline gets an `ERROR` row (with the
+error message) rather than aborting the rest of the evaluation.
+
+Output is saved to `outputs/evaluation_summary.md` by default (gitignored,
+same as `outputs/<call_id>.json` from the pipeline CLI).
+
 ## Tests
 
 ```bash
@@ -208,11 +233,13 @@ pytest
 ```
 
 `tests/test_stage1_asr.py` and the end-to-end cases in
-`tests/test_stage2_diarization.py` / `tests/test_stage3_recommendations.py`
-transcribe/diarize/analyze whatever call recording they find in
-`sample_audio/`. If that folder is empty, `HF_TOKEN` isn't set, or
-`ANTHROPIC_API_KEY` isn't set, they skip (with a message) instead of
-failing — add a real recording and/or set those keys to actually exercise
-them. Everything else — merge/role-assignment logic, sentiment/emotion
-scoring, pivot detection, and the Stage 3 LLM call (mocked) — runs against
-synthetic data and needs none of that.
+`tests/test_stage2_diarization.py` / `tests/test_stage3_recommendations.py` /
+`tests/test_pipeline.py` transcribe/diarize/analyze/run whatever call
+recording they find in `sample_audio/`. If that folder is empty, `HF_TOKEN`
+isn't set, or `ANTHROPIC_API_KEY` isn't set, they skip (with a message)
+instead of failing — add a real recording and/or set those keys to actually
+exercise them. Everything else — merge/role-assignment logic,
+sentiment/emotion scoring, pivot detection, the Stage 3 LLM call (mocked),
+the pipeline's silent-audio error path (runs for real), and `evaluate.py`'s
+table rendering/WER logic (mocked pipeline) — runs against synthetic data and
+needs none of that.
