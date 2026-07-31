@@ -1,0 +1,10 @@
+faster-whisper
+pyannote.audio
+transformers
+torch
+ruptures
+anthropic
+python-dotenv
+pytest
+librosa
+soundfile
