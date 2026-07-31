@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -26,17 +27,31 @@ def _find_sample_audio():
     return None
 
 
-class FakeToolUseBlock:
-    def __init__(self, name, input_):
-        self.type = "tool_use"
+class FakeFunctionCall:
+    def __init__(self, name, arguments_dict):
         self.name = name
-        self.input = input_
+        self.arguments = json.dumps(arguments_dict)
+
+
+class FakeToolCall:
+    def __init__(self, name, arguments_dict):
+        self.function = FakeFunctionCall(name, arguments_dict)
+
+
+class FakeMessage:
+    def __init__(self, tool_calls=None, content=None):
+        self.tool_calls = tool_calls
+        self.content = content
+
+
+class FakeChoice:
+    def __init__(self, message):
+        self.message = message
 
 
 class FakeResponse:
-    def __init__(self, content, stop_reason="tool_use"):
-        self.content = content
-        self.stop_reason = stop_reason
+    def __init__(self, choices):
+        self.choices = choices
 
 
 # --- Part A: sentiment (real local model, synthetic text) ---
@@ -122,17 +137,19 @@ def test_detect_pivot_too_short_returns_no_pivot():
 # --- Part D: LLM recommendation (mocked — no real API calls) ---
 
 
-def test_generate_recommendation_returns_tool_input(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+def test_generate_recommendation_returns_tool_call_arguments(monkeypatch):
+    monkeypatch.setenv("NVIDIA_API_KEY", "test-key")
     expected = {
         "what_went_wrong": "The agent quoted an outdated policy detail.",
         "root_cause": "The agent looked up an old cached account record.",
         "repair_suggestion": "Refresh the account record before quoting policy details.",
     }
-    fake_response = FakeResponse([FakeToolUseBlock("submit_call_analysis", expected)])
+    fake_response = FakeResponse(
+        [FakeChoice(FakeMessage(tool_calls=[FakeToolCall("submit_call_analysis", expected)]))]
+    )
     fake_client = MagicMock()
-    fake_client.messages.create.return_value = fake_response
-    monkeypatch.setattr(recommendation.anthropic, "Anthropic", lambda **kwargs: fake_client)
+    fake_client.chat.completions.create.return_value = fake_response
+    monkeypatch.setattr(recommendation.openai, "OpenAI", lambda **kwargs: fake_client)
 
     result = recommendation.generate_recommendation(
         merged_segments=[{"start": 0.0, "end": 1.0, "text": "hi", "speaker": "agent"}],
@@ -142,45 +159,78 @@ def test_generate_recommendation_returns_tool_input(monkeypatch):
     )
 
     assert result == expected
-    fake_client.messages.create.assert_called_once()
-    call_kwargs = fake_client.messages.create.call_args.kwargs
-    assert call_kwargs["tool_choice"] == {"type": "tool", "name": "submit_call_analysis"}
-    assert call_kwargs["tools"][0]["name"] == "submit_call_analysis"
+    fake_client.chat.completions.create.assert_called_once()
+    call_kwargs = fake_client.chat.completions.create.call_args.kwargs
+    assert call_kwargs["tool_choice"] == {"type": "function", "function": {"name": "submit_call_analysis"}}
+    assert call_kwargs["tools"][0]["function"]["name"] == "submit_call_analysis"
+
+
+def test_generate_recommendation_falls_back_to_plain_content(monkeypatch):
+    monkeypatch.setenv("NVIDIA_API_KEY", "test-key")
+    expected = {"what_went_wrong": "a", "root_cause": "b", "repair_suggestion": "c"}
+    # Model ignored tool_choice and just answered with the JSON as plain text.
+    fake_response = FakeResponse([FakeChoice(FakeMessage(tool_calls=None, content=json.dumps(expected)))])
+    fake_client = MagicMock()
+    fake_client.chat.completions.create.return_value = fake_response
+    monkeypatch.setattr(recommendation.openai, "OpenAI", lambda **kwargs: fake_client)
+
+    result = recommendation.generate_recommendation([], [], [], {})
+
+    assert result == expected
 
 
 def test_generate_recommendation_missing_api_key(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
 
-    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+    with pytest.raises(RuntimeError, match="NVIDIA_API_KEY"):
         recommendation.generate_recommendation([], [], [], {"turn_index": None, "description": "x"})
 
 
 def test_generate_recommendation_retries_once_then_succeeds(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("NVIDIA_API_KEY", "test-key")
     expected = {"what_went_wrong": "a", "root_cause": "b", "repair_suggestion": "c"}
-    fake_response = FakeResponse([FakeToolUseBlock("submit_call_analysis", expected)])
+    fake_response = FakeResponse(
+        [FakeChoice(FakeMessage(tool_calls=[FakeToolCall("submit_call_analysis", expected)]))]
+    )
     fake_client = MagicMock()
-    fake_client.messages.create.side_effect = [RuntimeError("transient failure"), fake_response]
-    monkeypatch.setattr(recommendation.anthropic, "Anthropic", lambda **kwargs: fake_client)
+    fake_client.chat.completions.create.side_effect = [RuntimeError("transient failure"), fake_response]
+    monkeypatch.setattr(recommendation.openai, "OpenAI", lambda **kwargs: fake_client)
     monkeypatch.setattr(recommendation.time, "sleep", lambda seconds: None)
 
     result = recommendation.generate_recommendation([], [], [], {}, max_retries=1)
 
     assert result == expected
-    assert fake_client.messages.create.call_count == 2
+    assert fake_client.chat.completions.create.call_count == 2
+
+
+def test_generate_recommendation_retries_on_missing_required_field(monkeypatch):
+    monkeypatch.setenv("NVIDIA_API_KEY", "test-key")
+    incomplete = {"what_went_wrong": "a", "root_cause": "b"}  # missing repair_suggestion
+    complete = {"what_went_wrong": "a", "root_cause": "b", "repair_suggestion": "c"}
+    bad_response = FakeResponse([FakeChoice(FakeMessage(tool_calls=[FakeToolCall("submit_call_analysis", incomplete)]))])
+    good_response = FakeResponse([FakeChoice(FakeMessage(tool_calls=[FakeToolCall("submit_call_analysis", complete)]))])
+    fake_client = MagicMock()
+    fake_client.chat.completions.create.side_effect = [bad_response, good_response]
+    monkeypatch.setattr(recommendation.openai, "OpenAI", lambda **kwargs: fake_client)
+    monkeypatch.setattr(recommendation.time, "sleep", lambda seconds: None)
+
+    result = recommendation.generate_recommendation([], [], [], {}, max_retries=1)
+
+    assert result == complete
+    assert fake_client.chat.completions.create.call_count == 2
 
 
 def test_generate_recommendation_raises_after_exhausting_retries(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("NVIDIA_API_KEY", "test-key")
     fake_client = MagicMock()
-    fake_client.messages.create.side_effect = RuntimeError("boom")
-    monkeypatch.setattr(recommendation.anthropic, "Anthropic", lambda **kwargs: fake_client)
+    fake_client.chat.completions.create.side_effect = RuntimeError("boom")
+    monkeypatch.setattr(recommendation.openai, "OpenAI", lambda **kwargs: fake_client)
     monkeypatch.setattr(recommendation.time, "sleep", lambda seconds: None)
 
     with pytest.raises(RuntimeError, match="Failed to get a recommendation"):
         recommendation.generate_recommendation([], [], [], {}, max_retries=1)
 
-    assert fake_client.messages.create.call_count == 2
+    assert fake_client.chat.completions.create.call_count == 2
 
 
 # --- Part E: analyze_call schema (mocked recommendation, real sentiment/emotion) ---
@@ -212,7 +262,7 @@ def test_analyze_call_schema(monkeypatch):
     assert result["recommendation"] == fake_recommendation
 
 
-# --- End-to-end test using real audio + real Claude API ---
+# --- End-to-end test using real audio + real NVIDIA API ---
 
 
 def test_analyze_call_end_to_end_on_sample_audio():
@@ -224,8 +274,8 @@ def test_analyze_call_end_to_end_on_sample_audio():
         )
     if not os.environ.get("HF_TOKEN"):
         pytest.skip("HF_TOKEN is not set; can't run real diarization for the Stage 2 step.")
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        pytest.skip("ANTHROPIC_API_KEY is not set; can't call the real Claude API for Stage 3.")
+    if not os.environ.get("NVIDIA_API_KEY"):
+        pytest.skip("NVIDIA_API_KEY is not set; can't call the real NVIDIA API for Stage 3.")
 
     from src.stage1_asr.transcribe import transcribe_call
     from src.stage2_diarization.label import label_speakers

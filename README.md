@@ -10,7 +10,7 @@ clearline-backend/
   src/
     stage1_asr/            # Speech-to-text (faster-whisper)
     stage2_diarization/    # Speaker diarization (pyannote.audio)
-    stage3_recommendations/# Insight/recommendation generation (Anthropic API)
+    stage3_recommendations/# Insight/recommendation generation (NVIDIA NIM / Nemotron)
     pipeline.py            # Orchestrates the three stages end-to-end
   tests/                   # Unit tests + smoke_test.py
   sample_audio/            # Local sample call recordings for manual testing (gitignored)
@@ -39,7 +39,8 @@ cp .env.example .env
 ```
 
 See `.env.example` for what each variable is and where to get it
-(`HF_TOKEN` for Hugging Face model downloads, `ANTHROPIC_API_KEY` for Claude).
+(`HF_TOKEN` for Hugging Face model downloads, `NVIDIA_API_KEY` for the
+NVIDIA NIM-hosted Nemotron model used for recommendations).
 
 ### Verify the install
 
@@ -48,7 +49,7 @@ python tests/smoke_test.py
 ```
 
 This imports every core dependency (faster-whisper, pyannote.audio,
-transformers, torch, ruptures, anthropic, python-dotenv, pytest, librosa,
+transformers, torch, ruptures, openai, python-dotenv, pytest, librosa,
 soundfile) and reports pass/fail for each.
 
 ## Running the pipeline
@@ -194,10 +195,15 @@ Output shape:
   stayed flat, or only rose).
 - `generate_recommendation()` (`recommendation.py`) sends the full
   speaker-tagged transcript + sentiment trajectory + emotion tags + pivot
-  point to Claude (`claude-opus-5`, `ANTHROPIC_API_KEY` from `.env`), forcing
-  a `submit_call_analysis` tool call (`strict: true`) so the reply is
-  guaranteed-valid JSON rather than parsed free text. Retries once on
-  failure; raises a clear `RuntimeError` if the key is missing or rejected.
+  point to an NVIDIA NIM-hosted Nemotron model
+  (`nvidia/llama-3.1-nemotron-70b-instruct` by default, `NVIDIA_API_KEY`
+  from `.env`) via NVIDIA's OpenAI-compatible chat completions API, forcing
+  a `submit_call_analysis` tool/function call so the reply is
+  schema-conforming JSON rather than parsed free text (if the model ignores
+  `tool_choice` and answers in plain text anyway, that text is still parsed
+  as JSON before giving up). Retries once on failure, on malformed JSON, or
+  on a response missing a required field; raises a clear `RuntimeError` if
+  the key is missing or rejected.
 - `analyze_call()` (`analyze.py`) runs all of the above and returns the full
   Stage 3 schema shown here.
 
@@ -252,13 +258,9 @@ current. `progress_pct` is a fixed value per stage-start
 (`transcribing`→0, `diarizing`→40, `analyzing`→70, `done`→100), not a
 continuous measurement within a stage.
 
-**NVIDIA API key (not yet wired in):** `.env.example` now also lists
-`NVIDIA_API_KEY` — optional, and currently a no-op. When set, it's meant to
-route ASR and/or the recommendation LLM call through NVIDIA NIM/Riva instead
-of local faster-whisper/Claude, but that integration isn't implemented yet;
-every stage keeps using the local open-source models (and Claude, via
-`ANTHROPIC_API_KEY`, for recommendations) regardless of whether
-`NVIDIA_API_KEY` is set.
+**NVIDIA API key:** `NVIDIA_API_KEY` is required for Stage 3's recommendation
+call — there is no other LLM provider wired in. ASR (Stage 1) and diarization
+(Stage 2) are unaffected and keep using local open-source models regardless.
 
 ## Tests
 

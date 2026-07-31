@@ -3,7 +3,7 @@ pyannote.audio
 transformers
 torch
 ruptures
-anthropic
+openai
 python-dotenv
 pytest
 librosa

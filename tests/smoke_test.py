@@ -11,7 +11,7 @@ PACKAGES = [
     "transformers",
     "torch",
     "ruptures",
-    "anthropic",
+    "openai",
     "dotenv",
     "pytest",
     "librosa",

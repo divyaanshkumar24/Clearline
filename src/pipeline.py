@@ -3,7 +3,7 @@
 Stages:
   1. stage1_asr            - transcribe call audio (faster-whisper)
   2. stage2_diarization     - identify speakers (pyannote.audio)
-  3. stage3_recommendations - generate insights/recommendations (Anthropic API)
+  3. stage3_recommendations - generate insights/recommendations (NVIDIA NIM / Nemotron)
 """
 
 import argparse

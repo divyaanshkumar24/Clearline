@@ -1,20 +1,29 @@
-"""Part D: LLM-generated coaching recommendation via Claude, forced through tool use.
+"""Part D: LLM-generated coaching recommendation via an NVIDIA NIM-hosted Nemotron
+model, forced through OpenAI-style tool/function calling.
 
-Uses a forced tool call (tool_choice naming the tool, plus strict:true on its
-input_schema) rather than parsing free text, so the response is guaranteed to be
-valid, schema-conforming JSON.
+NVIDIA NIM (build.nvidia.com) exposes an OpenAI-compatible chat completions API, so
+this uses the official `openai` SDK pointed at NVIDIA's endpoint rather than a
+NVIDIA-specific client. Forcing a tool call (rather than parsing free text) keeps the
+response schema-conforming; if the model ignores `tool_choice` and answers in plain
+text anyway, we still try to parse that text as JSON before giving up.
 """
 
+import json
 import os
 import time
 from typing import Dict, List, Optional
 
-import anthropic
+import openai
 from dotenv import load_dotenv
 
 load_dotenv()
 
-MODEL = "claude-opus-5"
+NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
+
+# NVIDIA NIM hosts several Nemotron variants under the same API — swap this to try
+# another one (e.g. "nvidia/llama-3.3-nemotron-super-49b-v1" or
+# "nvidia/nemotron-4-340b-instruct").
+MODEL = "nvidia/llama-3.1-nemotron-70b-instruct"
 
 SYSTEM_PROMPT = (
     "You are a call-quality coaching assistant analyzing a compliance call between "
@@ -28,39 +37,42 @@ SYSTEM_PROMPT = (
 )
 
 RECOMMENDATION_TOOL = {
-    "name": "submit_call_analysis",
-    "description": "Submit the structured call-quality coaching analysis.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "what_went_wrong": {
-                "type": "string",
-                "description": "What went wrong in the call, in plain language. If nothing went wrong, say so.",
+    "type": "function",
+    "function": {
+        "name": "submit_call_analysis",
+        "description": "Submit the structured call-quality coaching analysis.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "what_went_wrong": {
+                    "type": "string",
+                    "description": "What went wrong in the call, in plain language. If nothing went wrong, say so.",
+                },
+                "root_cause": {
+                    "type": "string",
+                    "description": "The underlying root cause behind what went wrong.",
+                },
+                "repair_suggestion": {
+                    "type": "string",
+                    "description": "A concrete, actionable suggestion for the agent to repair or prevent this in future calls.",
+                },
             },
-            "root_cause": {
-                "type": "string",
-                "description": "The underlying root cause behind what went wrong.",
-            },
-            "repair_suggestion": {
-                "type": "string",
-                "description": "A concrete, actionable suggestion for the agent to repair or prevent this in future calls.",
-            },
+            "required": ["what_went_wrong", "root_cause", "repair_suggestion"],
         },
-        "required": ["what_went_wrong", "root_cause", "repair_suggestion"],
-        "additionalProperties": False,
     },
-    "strict": True,
 }
 
+REQUIRED_KEYS = ("what_went_wrong", "root_cause", "repair_suggestion")
 
-def _get_client() -> anthropic.Anthropic:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+
+def _get_client() -> openai.OpenAI:
+    api_key = os.environ.get("NVIDIA_API_KEY")
     if not api_key:
         raise RuntimeError(
-            "ANTHROPIC_API_KEY is not set. Add it to clearline-backend/.env (see "
-            ".env.example) — get a key at https://console.anthropic.com/settings/keys."
+            "NVIDIA_API_KEY is not set. Add it to clearline-backend/.env (see "
+            ".env.example) — get a free-tier key at https://build.nvidia.com/."
         )
-    return anthropic.Anthropic(api_key=api_key)
+    return openai.OpenAI(base_url=NVIDIA_BASE_URL, api_key=api_key)
 
 
 def _format_transcript(merged_segments: List[Dict]) -> str:
@@ -71,6 +83,14 @@ def _format_transcript(merged_segments: List[Dict]) -> str:
     return "\n".join(lines)
 
 
+def _validate_recommendation(data) -> None:
+    if not isinstance(data, dict):
+        raise ValueError(f"recommendation is not a JSON object: {data!r}")
+    missing = [key for key in REQUIRED_KEYS if not isinstance(data.get(key), str) or not data[key].strip()]
+    if missing:
+        raise ValueError(f"recommendation is missing/empty required field(s): {missing}")
+
+
 def generate_recommendation(
     merged_segments: List[Dict],
     sentiment_trajectory: List[Dict],
@@ -79,10 +99,13 @@ def generate_recommendation(
     model: str = MODEL,
     max_retries: int = 1,
 ) -> Dict:
-    """Ask Claude for a structured coaching recommendation, forced via tool use.
+    """Ask an NVIDIA-hosted Nemotron model for a structured coaching recommendation,
+    forced via OpenAI-style tool/function calling.
 
-    Retries up to `max_retries` additional times (default 1, so 2 attempts total)
-    if the API call fails or Claude doesn't return the expected tool call.
+    Retries up to `max_retries` additional times (default 1, so 2 attempts total) if
+    the API call fails, or the model doesn't return a usable, schema-conforming
+    recommendation (missing tool call and unparsable content, malformed JSON, or
+    missing required fields).
     """
     client = _get_client()
 
@@ -100,26 +123,34 @@ def generate_recommendation(
     last_error: Optional[BaseException] = None
     for attempt in range(max_retries + 1):
         try:
-            response = client.messages.create(
+            response = client.chat.completions.create(
                 model=model,
-                max_tokens=1024,
-                system=SYSTEM_PROMPT,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_content},
+                ],
                 tools=[RECOMMENDATION_TOOL],
-                tool_choice={"type": "tool", "name": "submit_call_analysis"},
-                messages=[{"role": "user", "content": user_content}],
+                tool_choice={"type": "function", "function": {"name": "submit_call_analysis"}},
+                temperature=0.2,
+                max_tokens=1024,
             )
+            message = response.choices[0].message
 
-            for block in response.content:
-                if block.type == "tool_use" and block.name == "submit_call_analysis":
-                    return dict(block.input)
+            if message.tool_calls:
+                arguments = json.loads(message.tool_calls[0].function.arguments)
+            elif message.content:
+                # Some NIM models may ignore tool_choice and answer in plain text
+                # instead — try to parse that directly rather than failing outright.
+                arguments = json.loads(message.content)
+            else:
+                raise RuntimeError("NVIDIA API returned neither a tool call nor message content")
 
-            last_error = RuntimeError(
-                f"Claude did not call submit_call_analysis (stop_reason={response.stop_reason})"
-            )
-        except anthropic.AuthenticationError as exc:
+            _validate_recommendation(arguments)
+            return {key: arguments[key] for key in REQUIRED_KEYS}
+        except openai.AuthenticationError as exc:
             raise RuntimeError(
-                "ANTHROPIC_API_KEY was rejected by the API — check that it's valid "
-                "at https://console.anthropic.com/settings/keys."
+                "NVIDIA_API_KEY was rejected by the API — check that it's valid at "
+                "https://build.nvidia.com/."
             ) from exc
         except Exception as exc:  # noqa: BLE001 - deliberately broad for this retry loop
             last_error = exc
@@ -128,5 +159,5 @@ def generate_recommendation(
             time.sleep(1.0)
 
     raise RuntimeError(
-        f"Failed to get a recommendation from Claude after {max_retries + 1} attempt(s): {last_error}"
+        f"Failed to get a recommendation from NVIDIA after {max_retries + 1} attempt(s): {last_error}"
     ) from last_error

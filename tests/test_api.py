@@ -34,8 +34,8 @@ def test_upload_poll_and_fetch_result(monkeypatch):
             "Add a call recording (.wav/.mp3/etc) there and re-run this test."
         )
 
-    # Stage 3's LLM call needs a real ANTHROPIC_API_KEY/NVIDIA key we don't require for
-    # this test — mock it so the pipeline can reach "done" on local models alone.
+    # Stage 3's LLM call needs a real NVIDIA_API_KEY we don't require for this test —
+    # mock it so the pipeline can reach "done" on local models alone.
     monkeypatch.setattr(analyze_module, "generate_recommendation", lambda *a, **kw: FAKE_RECOMMENDATION)
 
     client = TestClient(api.app)

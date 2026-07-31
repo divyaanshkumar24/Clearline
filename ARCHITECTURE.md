@@ -20,7 +20,7 @@ audio file
 └─────────────────────┘
     │  {call_id, segments: [{start, end, text, speaker: "agent"|"client"}]}
     ▼
-┌─────────────────────┐   HF sentiment/emotion models + ruptures + Claude
+┌─────────────────────┐   HF sentiment/emotion models + ruptures + NVIDIA NIM (Nemotron)
 │  Stage 3 — Analyze   │   src/stage3_recommendations/
 └─────────────────────┘
     │
@@ -111,16 +111,21 @@ values (Part C), plus the full transcript (Part D):
    clear pivot detected"}` — not an error — when no breakpoint is found or
    every shift is flat/positive.
 4. **`recommendation.py`** — sends the full speaker-tagged transcript, the
-   sentiment trajectory, the emotion tags, and the pivot point to **Claude**
-   (`claude-opus-5`, `ANTHROPIC_API_KEY` from `.env`), forcing a
-   `submit_call_analysis` tool call (`strict: true`) so the reply is
-   guaranteed-valid JSON rather than parsed free text. Retries once on
-   failure; raises a clear error if the key is missing or rejected.
+   sentiment trajectory, the emotion tags, and the pivot point to an
+   **NVIDIA NIM-hosted Nemotron model** (`nvidia/llama-3.1-nemotron-70b-instruct`
+   by default, `NVIDIA_API_KEY` from `.env`) via NVIDIA's OpenAI-compatible
+   chat completions API, forcing a `submit_call_analysis` tool/function call
+   so the reply is schema-conforming JSON rather than parsed free text (a
+   plain-text fallback still attempts to parse the response as JSON if the
+   model ignores `tool_choice`). Retries once on failure, malformed JSON, or
+   a response missing a required field; raises a clear error if the key is
+   missing or rejected.
 
 **Models:** `cardiffnlp/twitter-roberta-base-sentiment-latest`,
 `SamLowe/roberta-base-go_emotions` (both local, no API key), `ruptures` (pure
-algorithm, no model), Claude `claude-opus-5` (via the `anthropic` SDK,
-requires `ANTHROPIC_API_KEY`).
+algorithm, no model), `nvidia/llama-3.1-nemotron-70b-instruct` (via the
+`openai` SDK pointed at NVIDIA's OpenAI-compatible endpoint, requires
+`NVIDIA_API_KEY`).
 
 ## Orchestration (`src/pipeline.py`)
 
@@ -171,10 +176,10 @@ lives in an in-process dict — no queue, no database, fine at this scale but
 gone on restart and not shared across worker processes. See the README's
 "Web API" section for the endpoint table and run command.
 
-## Not yet wired in: NVIDIA
+## LLM provider: NVIDIA NIM
 
-`.env.example` reserves `NVIDIA_API_KEY` for a future swap — ASR via NVIDIA
-NIM/Riva instead of local faster-whisper, and/or an alternate LLM provider
-for Stage 3's recommendation instead of Claude. No stage currently reads
-this variable; every stage keeps using the local open-source models (Claude
-via `ANTHROPIC_API_KEY` for recommendations) regardless of whether it's set.
+Stage 3's recommendation call runs entirely on NVIDIA NIM — there is no
+Anthropic/Claude dependency anywhere in this project anymore. `NVIDIA_API_KEY`
+is required for `generate_recommendation()` to work; ASR (Stage 1) and
+diarization (Stage 2) are unaffected and keep using local open-source models
+regardless.

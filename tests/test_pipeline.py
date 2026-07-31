@@ -49,8 +49,8 @@ def test_run_pipeline_end_to_end_on_sample_audio():
         )
     if not os.environ.get("HF_TOKEN"):
         pytest.skip("HF_TOKEN is not set; can't run real diarization for the Stage 2 step.")
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        pytest.skip("ANTHROPIC_API_KEY is not set; can't call the real Claude API for Stage 3.")
+    if not os.environ.get("NVIDIA_API_KEY"):
+        pytest.skip("NVIDIA_API_KEY is not set; can't call the real NVIDIA API for Stage 3.")
 
     result = run_pipeline(str(sample_path))
 
