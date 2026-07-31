@@ -107,7 +107,12 @@ def diarize_call(audio_path: str, dual_channel: bool = False) -> List[Dict]:
         return _diarize_dual_channel(audio_path)
 
     pipeline = _load_diarization_pipeline()
-    diarization = pipeline(str(Path(audio_path)))
+    output = pipeline(str(Path(audio_path)))
+    # pyannote.audio 4.x's SpeakerDiarization pipeline returns a DiarizeOutput
+    # dataclass rather than a bare Annotation. exclusive_speaker_diarization has
+    # overlapping speech turns resolved — exactly what merging with an ASR
+    # transcript (one speaker per segment) needs.
+    diarization = output.exclusive_speaker_diarization
 
     return [
         {"start": round(turn.start, 3), "end": round(turn.end, 3), "speaker": speaker}
