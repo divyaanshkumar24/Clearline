@@ -11,10 +11,12 @@ import sys
 from pathlib import Path
 
 # Allow running this file directly (`python src/stage1_asr/run.py ...`) without
-# the package being installed, regardless of the current working directory.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# the package being installed, regardless of the current working directory. The
+# project root (not just src/) goes on sys.path so relative imports between
+# stage packages (e.g. stage2_diarization reusing stage1_asr's VAD) keep working.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from stage1_asr.transcribe import transcribe_call  # noqa: E402
+from src.stage1_asr.transcribe import transcribe_call  # noqa: E402
 
 
 def main() -> None:

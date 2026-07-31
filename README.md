@@ -102,13 +102,61 @@ The first run downloads the Silero VAD repo (via `torch.hub`, cached under
 `HF_TOKEN` in `.env` avoids Hugging Face Hub rate limiting on that first
 download.
 
+### Stage 2 (diarization + roles) standalone
+
+Stage 2 assigns each Stage 1 transcript segment a speaker, then maps the
+anonymous speaker labels to "agent"/"client":
+
+```bash
+# Re-runs Stage 1 itself, then diarizes + assigns roles:
+python src/stage2_diarization/run.py path/to/call.wav
+
+# Or reuse a Stage 1 JSON you already produced:
+python src/stage2_diarization/run.py path/to/call.wav --asr-json stage1_out.json
+
+# If the recording is stereo with channel 0 = agent, channel 1 = client, skip
+# diarization entirely and split by channel instead:
+python src/stage2_diarization/run.py path/to/call.wav --dual-channel
+```
+
+Output shape:
+
+```json
+{
+  "call_id": "call",
+  "segments": [
+    {"start": 12.4, "end": 15.8, "text": "...", "speaker": "agent"}
+  ]
+}
+```
+
+- `diarize_call()` (`diarization.py`) loads `pyannote/speaker-diarization-3.1`
+  using `HF_TOKEN` from `.env`. This model is gated — beyond setting the
+  token, you must accept its terms (and its dependency,
+  `pyannote/segmentation-3.0`) on Hugging Face while logged in as the token's
+  account. If the token is missing or the terms haven't been accepted,
+  `diarize_call()` raises a `RuntimeError` naming both model pages to visit.
+- `merge_transcript_with_speakers()` (`merge.py`) assigns each transcript
+  segment whichever diarized speaker overlaps it the most in time.
+- `assign_roles()` (`roles.py`) maps `SPEAKER_00`/`SPEAKER_01` to
+  `agent`/`client` by scoring each speaker's first 3 segments against an
+  editable keyword list (`AGENT_PHRASES` in `roles.py`) — phrases like "thank
+  you for calling" or "my name is" score toward "agent". Segments already
+  labeled `agent`/`client` (dual-channel mode) pass through unchanged.
+- Dual-channel mode skips diarization and pyannote/`HF_TOKEN` entirely — it
+  runs Stage 1's Silero VAD independently on each channel and labels channel 0
+  "agent", channel 1 "client" directly.
+
 ## Tests
 
 ```bash
 pytest
 ```
 
-`tests/test_stage1_asr.py` transcribes whatever call recording it finds in
-`sample_audio/` and checks the output shape. If that folder is empty it
-skips (with a message) instead of failing — add a real recording there to
-actually exercise it.
+`tests/test_stage1_asr.py` and the end-to-end case in
+`tests/test_stage2_diarization.py` transcribe/diarize whatever call recording
+they find in `sample_audio/`. If that folder is empty, or `HF_TOKEN` isn't
+set, they skip (with a message) instead of failing — add a real recording
+and/or set `HF_TOKEN` to actually exercise them. The rest of
+`test_stage2_diarization.py` (merge + role-assignment logic) runs against
+synthetic data and needs neither.
