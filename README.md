@@ -53,7 +53,7 @@ soundfile) and reports pass/fail for each.
 
 ## Running the pipeline
 
-Once the stages are implemented, run the pipeline against a call recording:
+Once all stages are implemented, run the full pipeline against a call recording:
 
 ```bash
 source venv/bin/activate
@@ -68,8 +68,47 @@ python src/pipeline.py path/to/call.wav
 Drop test recordings in `sample_audio/` for local manual testing (this
 directory is gitignored).
 
+### Stage 1 (ASR) standalone
+
+Stage 1 (audio preprocessing + VAD + transcription) can be run on its own
+without the rest of the pipeline:
+
+```bash
+python src/stage1_asr/run.py path/to/call.wav
+python src/stage1_asr/run.py path/to/call.wav --model-size small --output out.json
+```
+
+It prints (or saves) JSON shaped like:
+
+```json
+{
+  "call_id": "call",
+  "segments": [
+    {"start": 12.4, "end": 15.8, "text": "..."}
+  ]
+}
+```
+
+Internally it: resamples the audio to 16kHz mono (`audio_preprocessing.py`),
+runs Silero VAD (loaded via `torch.hub`) to find speech regions and drop
+silence (`vad.py`), then runs faster-whisper on each speech region
+individually rather than on one concatenated/VAD-trimmed buffer — see the
+docstring in `transcribe.py` for why (avoids splice artifacts at segment
+boundaries and keeps timestamp math exact).
+
+The first run downloads the Silero VAD repo (via `torch.hub`, cached under
+`~/.cache/torch/hub`) and the faster-whisper model weights (cached under
+`~/.cache/huggingface`), so it's much slower than subsequent runs. Setting
+`HF_TOKEN` in `.env` avoids Hugging Face Hub rate limiting on that first
+download.
+
 ## Tests
 
 ```bash
-pytest tests/
+pytest
 ```
+
+`tests/test_stage1_asr.py` transcribes whatever call recording it finds in
+`sample_audio/` and checks the output shape. If that folder is empty it
+skips (with a message) instead of failing — add a real recording there to
+actually exercise it.
