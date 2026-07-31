@@ -4,6 +4,7 @@ __pycache__/
 .env
 sample_audio/*
 !sample_audio/.gitkeep
+outputs/
 .pytest_cache/
 *.egg-info/
 .DS_Store
