@@ -398,7 +398,7 @@ function pick<T>(rnd: () => number, arr: T[]): T {
   return arr[Math.floor(rnd() * arr.length)];
 }
 
-function deriveTier(scores: CriterionScore[]): RiskTier {
+export function deriveTier(scores: CriterionScore[]): RiskTier {
   const crits = new Map(CRITERIA.map((c) => [c.id, c]));
   let flags = 0;
   let nonCriticalFail = false;

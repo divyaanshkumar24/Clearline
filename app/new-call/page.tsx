@@ -40,7 +40,7 @@ export default function NewCallPage() {
         return;
       }
 
-      router.push(`/new-call/${data.call_id}`);
+      router.push(`/calls/${data.call_id}/processing`);
     } catch {
       toast.error("Couldn't reach the server", {
         description: "Check your connection and try again.",

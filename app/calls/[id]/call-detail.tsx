@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -11,6 +12,7 @@ import {
   Flame,
   History,
   Lightbulb,
+  Loader2,
   MessageSquareText,
   Pause,
   Play,
@@ -46,6 +48,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   ConfidenceMeter,
+  EmptyState,
   LabelBadge,
   RepAvatar,
   RiskBadge,
@@ -53,14 +56,15 @@ import {
 } from "@/components/shared";
 import { Reveal } from "@/components/motion";
 import {
-  CALLS,
+  getCall,
   getCriterion,
   getRep,
   getReviewer,
   getTranscript,
 } from "@/lib/mock-data";
+import { adaptLiveCall, LIVE_REP, type BackendCallResult } from "@/lib/live-call";
 import { fmtDateTime, fmtDuration, fmtPct, fmtTimestamp } from "@/lib/format";
-import type { Call, ScoreLabel } from "@/lib/types";
+import type { Call, ScoreLabel, TranscriptSegment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useRole, REP_PERSONA } from "@/components/role-context";
 import { AccessDenied } from "@/components/role-gate";
@@ -86,10 +90,65 @@ function seededBars(id: string, n: number) {
 export function CallDetail({ callId }: { callId: string }) {
   const { role } = useRole();
   const isRep = role === "rep";
-  const call = CALLS.find((c) => c.id === callId)!;
-  const rep = getRep(call.repId);
-  const transcript = React.useMemo(() => getTranscript(call), [call]);
-  const bars = React.useMemo(() => seededBars(call.id, 120), [call.id]);
+  const router = useRouter();
+
+  // Calls submitted through /new-call aren't in the mock dataset — for those,
+  // fetch and adapt the real backend result instead of the generated demo data.
+  const mockCall = React.useMemo(() => getCall(callId), [callId]);
+  const [liveData, setLiveData] = React.useState<{
+    call: Call;
+    transcript: TranscriptSegment[];
+  } | null>(null);
+  const [liveError, setLiveError] = React.useState<string | null>(null);
+  const [liveLoading, setLiveLoading] = React.useState(!mockCall);
+
+  React.useEffect(() => {
+    if (mockCall) return;
+    let cancelled = false;
+
+    async function loadLiveCall() {
+      setLiveLoading(true);
+      setLiveError(null);
+      try {
+        const res = await fetch(`/api/calls/${callId}`);
+        const data = await res.json().catch(() => null);
+        if (cancelled) return;
+
+        if (res.status === 409) {
+          // Still processing (e.g. a direct link followed before the pipeline
+          // finished) — send them to the status screen instead of erroring.
+          router.replace(`/calls/${callId}/processing`);
+          return;
+        }
+        if (!res.ok) {
+          throw new Error(data?.error ?? "This call couldn't be loaded.");
+        }
+        setLiveData(adaptLiveCall(data as BackendCallResult));
+      } catch (err) {
+        if (!cancelled) {
+          setLiveError(err instanceof Error ? err.message : "This call couldn't be loaded.");
+        }
+      } finally {
+        if (!cancelled) setLiveLoading(false);
+      }
+    }
+
+    loadLiveCall();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [callId, mockCall, router]);
+
+  const call = mockCall ?? liveData?.call;
+  const rep = call ? (call.repId === LIVE_REP.id ? LIVE_REP : getRep(call.repId)) : undefined;
+  const durationSec = call?.durationSec ?? 0;
+
+  const transcript = React.useMemo(() => {
+    if (!call) return [];
+    return mockCall ? getTranscript(call) : (liveData?.transcript ?? []);
+  }, [call, mockCall, liveData]);
+  const bars = React.useMemo(() => seededBars(callId, 120), [callId]);
 
   const [playing, setPlaying] = React.useState(false);
   const [time, setTime] = React.useState(0);
@@ -99,24 +158,28 @@ export function CallDetail({ callId }: { callId: string }) {
   >({});
   const [notes, setNotes] = React.useState<
     Array<{ author: string; text: string; ts: string }>
-  >([
-    {
-      author: "Omar Haddad",
-      text: "Guarantee language at the evidence span is unambiguous. Recommending escalation unless the rep disputes the transcript.",
-      ts: "Jul 14, 4:12 PM",
-    },
-  ]);
+  >(
+    mockCall
+      ? [
+          {
+            author: "Omar Haddad",
+            text: "Guarantee language at the evidence span is unambiguous. Recommending escalation unless the rep disputes the transcript.",
+            ts: "Jul 14, 4:12 PM",
+          },
+        ]
+      : [],
+  );
   const [draft, setDraft] = React.useState("");
   const transcriptRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     if (!playing) return;
     const iv = setInterval(
-      () => setTime((t) => (t + 1 > call.durationSec ? 0 : t + 1)),
+      () => setTime((t) => (t + 1 > durationSec ? 0 : t + 1)),
       1000,
     );
     return () => clearInterval(iv);
-  }, [playing, call.durationSec]);
+  }, [playing, durationSec]);
 
   const jumpTo = (ts: number, evidenceId?: string) => {
     setTime(ts);
@@ -150,9 +213,36 @@ export function CallDetail({ callId }: { callId: string }) {
   const effective = (s: Call["scores"][number]): ScoreLabel =>
     overrides[s.criterionId]?.label ?? s.override?.label ?? s.label;
 
+  if (liveLoading) {
+    return (
+      <div className="mx-auto flex max-w-[1600px] flex-col items-center gap-3 px-4 py-24 text-center">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        <p className="text-[13px] text-muted-foreground">Loading call…</p>
+      </div>
+    );
+  }
+
+  if (liveError || !call || !rep) {
+    return (
+      <div className="mx-auto max-w-[1200px] px-4 py-6 md:px-6 lg:px-8">
+        <EmptyState
+          icon={<AlertTriangle className="size-5" />}
+          title="This call couldn't be loaded"
+          description={liveError ?? "It may not exist, or the analysis backend is unreachable."}
+          action={
+            <ButtonLink href="/new-call" size="sm">
+              Start a new call
+            </ButtonLink>
+          }
+          className="mt-10"
+        />
+      </div>
+    );
+  }
+
   const passCount = call.scores.filter((s) => effective(s) === "pass").length;
 
-  if (isRep && call.repId !== REP_PERSONA.id) {
+  if (isRep && call.repId !== REP_PERSONA.id && call.repId !== LIVE_REP.id) {
     return <AccessDenied screen="This call belongs to another representative and" />;
   }
 
