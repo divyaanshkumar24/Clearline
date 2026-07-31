@@ -20,10 +20,13 @@ load_dotenv()
 
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
-# NVIDIA NIM hosts several Nemotron variants under the same API — swap this to try
-# another one (e.g. "nvidia/llama-3.3-nemotron-super-49b-v1" or
-# "nvidia/nemotron-4-340b-instruct").
-MODEL = "nvidia/llama-3.1-nemotron-70b-instruct"
+# NVIDIA NIM hosts several Nemotron variants under the same API, but not every
+# variant is enabled for every account/key — "nvidia/llama-3.1-nemotron-70b-instruct"
+# is listed by client.models.list() yet 404s ("Function ... Not found for account")
+# when actually called under this project's key. Verified working (real API call,
+# including forced tool-calling) as of this writing:
+# "nvidia/llama-3.3-nemotron-super-49b-v1". Swap here if you have a different key/tier.
+MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1"
 
 SYSTEM_PROMPT = (
     "You are a call-quality coaching assistant analyzing a compliance call between "

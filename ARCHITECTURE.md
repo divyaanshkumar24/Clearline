@@ -112,7 +112,7 @@ values (Part C), plus the full transcript (Part D):
    every shift is flat/positive.
 4. **`recommendation.py`** — sends the full speaker-tagged transcript, the
    sentiment trajectory, the emotion tags, and the pivot point to an
-   **NVIDIA NIM-hosted Nemotron model** (`nvidia/llama-3.1-nemotron-70b-instruct`
+   **NVIDIA NIM-hosted Nemotron model** (`nvidia/llama-3.3-nemotron-super-49b-v1`
    by default, `NVIDIA_API_KEY` from `.env`) via NVIDIA's OpenAI-compatible
    chat completions API, forcing a `submit_call_analysis` tool/function call
    so the reply is schema-conforming JSON rather than parsed free text (a
@@ -123,7 +123,7 @@ values (Part C), plus the full transcript (Part D):
 
 **Models:** `cardiffnlp/twitter-roberta-base-sentiment-latest`,
 `SamLowe/roberta-base-go_emotions` (both local, no API key), `ruptures` (pure
-algorithm, no model), `nvidia/llama-3.1-nemotron-70b-instruct` (via the
+algorithm, no model), `nvidia/llama-3.3-nemotron-super-49b-v1` (via the
 `openai` SDK pointed at NVIDIA's OpenAI-compatible endpoint, requires
 `NVIDIA_API_KEY`).
 
