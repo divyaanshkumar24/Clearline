@@ -90,10 +90,10 @@ accepted terms) — skipped entirely in dual-channel mode.
 ## Stage 3 — Recommendations (`src/stage3_recommendations/`)
 
 **Input:** Stage 2's speaker-tagged segments.
-**Output:** `{"call_id", "sentiment_trajectory", "emotion_tags", "pivot_point", "recommendation"}`
+**Output:** `{"call_id", "sentiment_trajectory", "emotion_tags", "pivot_point", "recommendation", "criterion_scores", "coaching_findings"}`
 
 Steps, run only over the **client's** segments (Parts A/B) or their derived
-values (Part C), plus the full transcript (Part D):
+values (Part C), plus the full transcript (Parts D/F):
 
 1. **`sentiment.py`** — **`cardiffnlp/twitter-roberta-base-sentiment-latest`**
    scores each client segment negative/neutral/positive + confidence, reduced
@@ -120,12 +120,29 @@ values (Part C), plus the full transcript (Part D):
    model ignores `tool_choice`). Retries once on failure, malformed JSON, or
    a response missing a required field; raises a clear error if the key is
    missing or rejected.
+5. **`compliance.py`** — a **second, separate** forced tool call (deliberately
+   not folded into `recommendation.py`'s call — smaller single-purpose
+   schemas are more reliable on an open model, and it isolates this call's
+   strict evidence-grounding retry from the already-reliable recommendation
+   call) that scores the transcript against 8 fixed compliance criteria
+   (`COMPLIANCE_CRITERIA`) and extracts coaching findings (`FINDING_TYPES`).
+   Output matches the Clearline frontend's `lib/types.ts` `CriterionScore` /
+   `CoachingFinding` interfaces exactly — **camelCase** field names
+   (`criterionId`, `evidenceTs`, `evidenceQuote`, etc.), unlike this
+   project's usual snake_case, so the frontend can consume it with no
+   transformation. Every `evidenceQuote`/`quote` is validated as a real,
+   verbatim (whitespace-normalized) substring of the transcript after the
+   model responds; `evidenceTs`/`ts` is never trusted from the model at all —
+   once a quote is matched to a segment, the timestamp is always overwritten
+   with that segment's real `start`. Ungrounded items trigger one retry with
+   corrective feedback naming the bad quotes; items still ungrounded after
+   that are dropped individually rather than failing the whole call.
 
 **Models:** `cardiffnlp/twitter-roberta-base-sentiment-latest`,
 `SamLowe/roberta-base-go_emotions` (both local, no API key), `ruptures` (pure
 algorithm, no model), `nvidia/llama-3.3-nemotron-super-49b-v1` (via the
 `openai` SDK pointed at NVIDIA's OpenAI-compatible endpoint, requires
-`NVIDIA_API_KEY`).
+`NVIDIA_API_KEY`) for both the recommendation and compliance-scoring calls.
 
 ## Orchestration (`src/pipeline.py`)
 
@@ -139,7 +156,9 @@ merges their outputs into one final report:
   "sentiment_trajectory": [{"start": 5.7, "end": 11.0, "text": "...", "label": "negative", "confidence": 0.75, "score": -0.75}],
   "emotion_tags": [{"start": 5.7, "end": 11.0, "text": "...", "emotion": "neutral", "confidence": 0.84}],
   "pivot_point": {"turn_index": 2, "timestamp": 25.9, "description": "sentiment dropped from 0.87 to -0.93"},
-  "recommendation": {"what_went_wrong": "...", "root_cause": "...", "repair_suggestion": "..."}
+  "recommendation": {"what_went_wrong": "...", "root_cause": "...", "repair_suggestion": "..."},
+  "criterion_scores": [{"criterionId": "no_guaranteed_returns", "label": "fail", "confidence": 0.95, "evidenceTs": 43.5, "evidenceQuote": "...", "rationale": "..."}],
+  "coaching_findings": [{"id": "...", "type": "Jargon-heavy explanation", "ts": 18.5, "quote": "...", "suggestion": "...", "severity": "minor"}]
 }
 ```
 
@@ -178,8 +197,17 @@ gone on restart and not shared across worker processes. See the README's
 
 ## LLM provider: NVIDIA NIM
 
-Stage 3's recommendation call runs entirely on NVIDIA NIM — there is no
+Both of Stage 3's LLM calls (`generate_recommendation()` and
+`generate_compliance_scoring()`) run entirely on NVIDIA NIM — there is no
 Anthropic/Claude dependency anywhere in this project anymore. `NVIDIA_API_KEY`
-is required for `generate_recommendation()` to work; ASR (Stage 1) and
-diarization (Stage 2) are unaffected and keep using local open-source models
-regardless.
+is required for both to work; ASR (Stage 1) and diarization (Stage 2) are
+unaffected and keep using local open-source models regardless.
+
+Note: `nvidia/llama-3.1-nemotron-70b-instruct` — a natural first choice, and
+what `NVIDIA_MODEL`/`MODEL` was originally set to — is listed by NVIDIA's
+`models.list()` endpoint but returns a 404 ("Function ... Not found for
+account") when actually called under the key configured for this project.
+`nvidia/llama-3.3-nemotron-super-49b-v1` is verified working (real calls,
+including forced tool-calling) and is the current default; if you have a
+different key/tier, re-verify before assuming any listed model actually
+works.

@@ -238,7 +238,14 @@ def test_generate_recommendation_raises_after_exhausting_retries(monkeypatch):
 
 def test_analyze_call_schema(monkeypatch):
     fake_recommendation = {"what_went_wrong": "x", "root_cause": "y", "repair_suggestion": "z"}
+    fake_criterion_scores = [{"criterionId": "recording_disclosure", "label": "fail"}]
+    fake_coaching_findings = [{"id": "f1", "type": "Interruption"}]
     monkeypatch.setattr(analyze_module, "generate_recommendation", lambda *a, **kw: fake_recommendation)
+    monkeypatch.setattr(
+        analyze_module,
+        "generate_compliance_scoring",
+        lambda *a, **kw: (fake_criterion_scores, fake_coaching_findings),
+    )
 
     merged_segments = [
         {"start": 0.0, "end": 2.0, "text": "Thank you for calling.", "speaker": "agent"},
@@ -255,11 +262,15 @@ def test_analyze_call_schema(monkeypatch):
         "emotion_tags",
         "pivot_point",
         "recommendation",
+        "criterion_scores",
+        "coaching_findings",
     }
     assert result["call_id"] == "test-call"
     assert len(result["sentiment_trajectory"]) == 2  # only the 2 client segments
     assert len(result["emotion_tags"]) == 2
     assert result["recommendation"] == fake_recommendation
+    assert result["criterion_scores"] == fake_criterion_scores
+    assert result["coaching_findings"] == fake_coaching_findings
 
 
 # --- End-to-end test using real audio + real NVIDIA API ---
@@ -289,3 +300,6 @@ def test_analyze_call_end_to_end_on_sample_audio():
     for key in ("what_went_wrong", "root_cause", "repair_suggestion"):
         assert key in result["recommendation"]
         assert result["recommendation"][key].strip() != ""
+
+    assert isinstance(result["criterion_scores"], list)
+    assert isinstance(result["coaching_findings"], list)

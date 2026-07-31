@@ -20,6 +20,8 @@ EXPECTED_TOP_LEVEL_KEYS = {
     "emotion_tags",
     "pivot_point",
     "recommendation",
+    "criterion_scores",
+    "coaching_findings",
 }
 
 

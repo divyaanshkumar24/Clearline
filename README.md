@@ -174,9 +174,34 @@ Output shape:
     "what_went_wrong": "...",
     "root_cause": "...",
     "repair_suggestion": "..."
-  }
+  },
+  "criterion_scores": [
+    {
+      "criterionId": "no_guaranteed_returns",
+      "label": "fail",
+      "confidence": 0.95,
+      "evidenceTs": 43.5,
+      "evidenceQuote": "you're guaranteed to see at least eight percent a year",
+      "rationale": "Agent guaranteed a specific return percentage."
+    }
+  ],
+  "coaching_findings": [
+    {
+      "id": "cf3407e1-ccb3-47a0-963a-6a67b590cd08",
+      "type": "Jargon-heavy explanation",
+      "ts": 18.5,
+      "quote": "a mix of large cap equities and investment grade bonds",
+      "suggestion": "Simplify technical terms for client understanding.",
+      "severity": "minor"
+    }
+  ]
 }
 ```
+
+`criterion_scores` and `coaching_findings` use **camelCase** keys (not this
+project's usual snake_case) — they match the Clearline frontend's
+`lib/types.ts` `CriterionScore`/`CoachingFinding` interfaces exactly, so the
+frontend can consume this JSON with no transformation layer.
 
 - `score_sentiment()` (`sentiment.py`) scores every **client** segment with
   `cardiffnlp/twitter-roberta-base-sentiment-latest` and reduces label +
@@ -204,6 +229,22 @@ Output shape:
   as JSON before giving up). Retries once on failure, on malformed JSON, or
   on a response missing a required field; raises a clear `RuntimeError` if
   the key is missing or rejected.
+- `generate_compliance_scoring()` (`compliance.py`) — a **separate** forced
+  tool call (not folded into `generate_recommendation()`; see the trade-off
+  note in `compliance.py`'s module docstring) that scores the call against 8
+  fixed compliance criteria (`COMPLIANCE_CRITERIA` — recording disclosure,
+  risk disclosure, fee disclosure, two suitability criteria, no-guaranteed-returns,
+  no-pressure, fair-and-balanced; edit that list to change them) and extracts
+  coaching findings (`FINDING_TYPES` enum). Every `evidenceQuote`/`quote` is
+  validated as a real, verbatim (whitespace-normalized) substring of the
+  transcript after the model responds — hallucinated quotes are never passed
+  through. `evidenceTs`/`ts` are never trusted from the model at all: once a
+  quote is matched to a segment, the timestamp is always overwritten with
+  that segment's real `start`, making timestamp correctness a code-enforced
+  invariant rather than something asked of the model. If some items fail
+  grounding, the whole call retries once with corrective feedback naming the
+  bad quotes; items still ungrounded after that are dropped (not the whole
+  response) rather than failing the call.
 - `analyze_call()` (`analyze.py`) runs all of the above and returns the full
   Stage 3 schema shown here.
 
@@ -272,10 +313,19 @@ pytest
 `tests/test_stage2_diarization.py` / `tests/test_stage3_recommendations.py` /
 `tests/test_pipeline.py` / `tests/test_api.py` transcribe/diarize/analyze/
 run/serve whatever call recording they find in `sample_audio/`. If that
-folder is empty, `HF_TOKEN` isn't set, or `ANTHROPIC_API_KEY` isn't set, they
+folder is empty, `HF_TOKEN` isn't set, or `NVIDIA_API_KEY` isn't set, they
 skip (with a message) instead of failing — add a real recording and/or set
 those keys to actually exercise them. Everything else — merge/role-assignment
-logic, sentiment/emotion scoring, pivot detection, the Stage 3 LLM call
-(mocked), the pipeline's silent-audio error path (runs for real),
+logic, sentiment/emotion scoring, pivot detection, the Stage 3 recommendation
+call (mocked), the pipeline's silent-audio error path (runs for real),
 `evaluate.py`'s table rendering/WER logic (mocked pipeline), and the API's
 404 handling — runs against synthetic data and needs none of that.
+
+`tests/test_compliance.py` is the exception: its evidence-grounding checks
+only mean something against a real model (a mock would trivially satisfy
+"quote is verbatim" by construction), so its end-to-end test calls the real
+NVIDIA API whenever `NVIDIA_API_KEY` is set — skipping otherwise — against a
+hand-authored financial-advisory transcript (not audio-dependent, since
+compliance scoring operates on transcript text, not audio). Its unit tests
+for the validation/retry/timestamp-correction logic itself are mocked and
+always run.

@@ -15,6 +15,8 @@ FAKE_RECOMMENDATION = {
     "root_cause": "Test placeholder.",
     "repair_suggestion": "Test placeholder.",
 }
+FAKE_CRITERION_SCORES = []
+FAKE_COACHING_FINDINGS = []
 
 
 def _find_sample_audio():
@@ -34,9 +36,14 @@ def test_upload_poll_and_fetch_result(monkeypatch):
             "Add a call recording (.wav/.mp3/etc) there and re-run this test."
         )
 
-    # Stage 3's LLM call needs a real NVIDIA_API_KEY we don't require for this test —
-    # mock it so the pipeline can reach "done" on local models alone.
+    # Stage 3's LLM calls need a real NVIDIA_API_KEY we don't require for this test —
+    # mock both so the pipeline can reach "done" on local models alone.
     monkeypatch.setattr(analyze_module, "generate_recommendation", lambda *a, **kw: FAKE_RECOMMENDATION)
+    monkeypatch.setattr(
+        analyze_module,
+        "generate_compliance_scoring",
+        lambda *a, **kw: (FAKE_CRITERION_SCORES, FAKE_COACHING_FINDINGS),
+    )
 
     client = TestClient(api.app)
 
@@ -73,9 +80,13 @@ def test_upload_poll_and_fetch_result(monkeypatch):
         "emotion_tags",
         "pivot_point",
         "recommendation",
+        "criterion_scores",
+        "coaching_findings",
     }
     assert result["call_id"] == call_id
     assert result["recommendation"] == FAKE_RECOMMENDATION
+    assert result["criterion_scores"] == FAKE_CRITERION_SCORES
+    assert result["coaching_findings"] == FAKE_COACHING_FINDINGS
 
 
 def test_status_for_unknown_call_id():

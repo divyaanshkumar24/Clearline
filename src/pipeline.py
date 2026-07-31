@@ -41,8 +41,8 @@ def run_pipeline(
             that progress is reported.
 
     Returns:
-        {"call_id", "segments", "sentiment_trajectory", "emotion_tags",
-         "pivot_point", "recommendation"}
+        {"call_id", "segments", "sentiment_trajectory", "emotion_tags", "pivot_point",
+         "recommendation", "criterion_scores", "coaching_findings"}
     """
 
     def _report(stage: str) -> None:
@@ -101,6 +101,8 @@ def run_pipeline(
         "emotion_tags": stage3_result["emotion_tags"],
         "pivot_point": stage3_result["pivot_point"],
         "recommendation": stage3_result["recommendation"],
+        "criterion_scores": stage3_result["criterion_scores"],
+        "coaching_findings": stage3_result["coaching_findings"],
     }
 
 
