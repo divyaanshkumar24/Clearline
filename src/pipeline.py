@@ -10,7 +10,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
-from typing import Dict
+from typing import Callable, Dict, Optional
 
 from dotenv import load_dotenv
 
@@ -25,17 +25,31 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-def run_pipeline(audio_path: str, dual_channel: bool = False) -> Dict:
+def run_pipeline(
+    audio_path: str,
+    dual_channel: bool = False,
+    on_stage: Optional[Callable[[str], None]] = None,
+) -> Dict:
     """Run the full Clearline pipeline (Stage 1 -> Stage 2 -> Stage 3) on a call recording.
 
     Args:
         audio_path: Path to the call recording.
         dual_channel: If True, skip diarization and split by channel (0=agent, 1=client).
+        on_stage: Optional callback invoked with "transcribing", "diarizing", "analyzing",
+            or "done" as each stage starts (or the pipeline finishes) — lets a caller (e.g.
+            a web API) surface progress without this function knowing anything about how
+            that progress is reported.
 
     Returns:
         {"call_id", "segments", "sentiment_trajectory", "emotion_tags",
          "pivot_point", "recommendation"}
     """
+
+    def _report(stage: str) -> None:
+        if on_stage is not None:
+            on_stage(stage)
+
+    _report("transcribing")
     logger.info("Stage 1: transcribing %s", audio_path)
     asr_result = transcribe_call(audio_path)
 
@@ -46,6 +60,7 @@ def run_pipeline(audio_path: str, dual_channel: bool = False) -> Dict:
             "rather than analyzing an empty call."
         )
 
+    _report("diarizing")
     logger.info("Stage 2: diarizing (dual_channel=%s)", dual_channel)
     diarization_segments = diarize_call(audio_path, dual_channel=dual_channel)
     merged = merge_transcript_with_speakers(asr_result["segments"], diarization_segments)
@@ -73,8 +88,11 @@ def run_pipeline(audio_path: str, dual_channel: bool = False) -> Dict:
             )
             labeled_segments = merged
 
+    _report("analyzing")
     logger.info("Stage 3: scoring sentiment/emotion, detecting pivot, generating recommendation")
     stage3_result = analyze_call(labeled_segments, call_id=asr_result["call_id"])
+
+    _report("done")
 
     return {
         "call_id": stage3_result["call_id"],

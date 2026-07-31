@@ -9,3 +9,7 @@ pytest
 librosa
 soundfile
 jiwer
+fastapi
+uvicorn[standard]
+python-multipart
+httpx

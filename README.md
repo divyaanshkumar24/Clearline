@@ -226,6 +226,40 @@ error message) rather than aborting the rest of the evaluation.
 Output is saved to `outputs/evaluation_summary.md` by default (gitignored,
 same as `outputs/<call_id>.json` from the pipeline CLI).
 
+## Web API (`src/api.py`)
+
+A FastAPI service exposing the pipeline over HTTP for the Next.js frontend
+(CORS is enabled for `http://localhost:3000`):
+
+```bash
+uvicorn src.api:app --reload
+```
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/calls` | `POST` | Multipart upload (`file`, optional `dual_channel` form field). Saves the audio to `uploads/`, starts the pipeline as a background task, returns `{"call_id", "status": "processing"}` immediately. |
+| `/calls/{call_id}/status` | `GET` | `{"call_id", "stage", "progress_pct"}` — `stage` is one of `queued` / `transcribing` / `diarizing` / `analyzing` / `done` / `failed` (with an `error` field when failed). |
+| `/calls/{call_id}` | `GET` | Once `stage == "done"`, the full combined report (same schema `run_pipeline()` returns). `409` while still processing, `500` if the pipeline failed, `404` for an unknown `call_id`. |
+
+Jobs are tracked in an in-process dict (`JOBS` in `api.py`) — no external queue
+or database, which is fine at this scale but means job state doesn't survive
+a server restart and won't work across multiple worker processes.
+
+`run_pipeline()` (`pipeline.py`) takes an optional `on_stage(stage: str)`
+callback, invoked as `"transcribing"` → `"diarizing"` → `"analyzing"` →
+`"done"` starts; `api.py` uses it to keep each job's `stage`/`progress_pct`
+current. `progress_pct` is a fixed value per stage-start
+(`transcribing`→0, `diarizing`→40, `analyzing`→70, `done`→100), not a
+continuous measurement within a stage.
+
+**NVIDIA API key (not yet wired in):** `.env.example` now also lists
+`NVIDIA_API_KEY` — optional, and currently a no-op. When set, it's meant to
+route ASR and/or the recommendation LLM call through NVIDIA NIM/Riva instead
+of local faster-whisper/Claude, but that integration isn't implemented yet;
+every stage keeps using the local open-source models (and Claude, via
+`ANTHROPIC_API_KEY`, for recommendations) regardless of whether
+`NVIDIA_API_KEY` is set.
+
 ## Tests
 
 ```bash
@@ -234,12 +268,12 @@ pytest
 
 `tests/test_stage1_asr.py` and the end-to-end cases in
 `tests/test_stage2_diarization.py` / `tests/test_stage3_recommendations.py` /
-`tests/test_pipeline.py` transcribe/diarize/analyze/run whatever call
-recording they find in `sample_audio/`. If that folder is empty, `HF_TOKEN`
-isn't set, or `ANTHROPIC_API_KEY` isn't set, they skip (with a message)
-instead of failing — add a real recording and/or set those keys to actually
-exercise them. Everything else — merge/role-assignment logic,
-sentiment/emotion scoring, pivot detection, the Stage 3 LLM call (mocked),
-the pipeline's silent-audio error path (runs for real), and `evaluate.py`'s
-table rendering/WER logic (mocked pipeline) — runs against synthetic data and
-needs none of that.
+`tests/test_pipeline.py` / `tests/test_api.py` transcribe/diarize/analyze/
+run/serve whatever call recording they find in `sample_audio/`. If that
+folder is empty, `HF_TOKEN` isn't set, or `ANTHROPIC_API_KEY` isn't set, they
+skip (with a message) instead of failing — add a real recording and/or set
+those keys to actually exercise them. Everything else — merge/role-assignment
+logic, sentiment/emotion scoring, pivot detection, the Stage 3 LLM call
+(mocked), the pipeline's silent-audio error path (runs for real),
+`evaluate.py`'s table rendering/WER logic (mocked pipeline), and the API's
+404 handling — runs against synthetic data and needs none of that.

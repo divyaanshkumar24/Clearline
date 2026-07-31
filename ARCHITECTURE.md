@@ -154,3 +154,27 @@ Error handling at each stage boundary:
 CLI: `python -m src.pipeline <audio_file> [--dual-channel] [--output-dir outputs]`
 saves the full JSON report to `outputs/<call_id>.json` and prints a short
 summary (call ID, pivot timestamp, one-line recommendation) to the console.
+
+`run_pipeline()` also accepts an optional `on_stage(stage: str)` callback,
+invoked as `"transcribing"` → `"diarizing"` → `"analyzing"` → `"done"` start —
+the hook `src/api.py` uses to report progress without the pipeline knowing
+anything about HTTP.
+
+## Web API (`src/api.py`)
+
+A thin FastAPI layer over the same `run_pipeline()`, for the Next.js
+frontend: `POST /calls` (multipart upload) kicks off the pipeline as a
+background task and returns a `call_id` immediately; `GET
+/calls/{call_id}/status` reports `stage`/`progress_pct`; `GET
+/calls/{call_id}` returns the full report once `stage == "done"`. Job state
+lives in an in-process dict — no queue, no database, fine at this scale but
+gone on restart and not shared across worker processes. See the README's
+"Web API" section for the endpoint table and run command.
+
+## Not yet wired in: NVIDIA
+
+`.env.example` reserves `NVIDIA_API_KEY` for a future swap — ASR via NVIDIA
+NIM/Riva instead of local faster-whisper, and/or an alternate LLM provider
+for Stage 3's recommendation instead of Claude. No stage currently reads
+this variable; every stage keeps using the local open-source models (Claude
+via `ANTHROPIC_API_KEY` for recommendations) regardless of whether it's set.
