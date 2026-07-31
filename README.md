@@ -147,16 +147,72 @@ Output shape:
   runs Stage 1's Silero VAD independently on each channel and labels channel 0
   "agent", channel 1 "client" directly.
 
+### Stage 3 (sentiment, emotion, pivot, recommendation) standalone
+
+Stage 3 takes a Stage 2 output and produces a sentiment trajectory, emotion
+tags, a detected pivot point, and an LLM-generated coaching recommendation:
+
+```bash
+python src/stage3_recommendations/run.py stage2_out.json
+python src/stage3_recommendations/run.py stage2_out.json --output stage3_out.json
+```
+
+Output shape:
+
+```json
+{
+  "call_id": "call",
+  "sentiment_trajectory": [
+    {"start": 5.7, "end": 11.06, "text": "...", "label": "negative", "confidence": 0.75, "score": -0.75}
+  ],
+  "emotion_tags": [
+    {"start": 5.7, "end": 11.06, "text": "...", "emotion": "neutral", "confidence": 0.84}
+  ],
+  "pivot_point": {"turn_index": 2, "timestamp": 25.9, "description": "sentiment dropped from 0.87 to -0.93"},
+  "recommendation": {
+    "what_went_wrong": "...",
+    "root_cause": "...",
+    "repair_suggestion": "..."
+  }
+}
+```
+
+- `score_sentiment()` (`sentiment.py`) scores every **client** segment with
+  `cardiffnlp/twitter-roberta-base-sentiment-latest` and reduces label +
+  confidence to a single signed number in `[-1, 1]` (positive=+1,
+  neutral=0, negative=-1, scaled by confidence) — the `sentiment_trajectory`.
+- `tag_emotions()` (`emotion.py`) tags each client segment with its top
+  `SamLowe/roberta-base-go_emotions` label.
+- `detect_pivot()` (`pivot.py`) runs `ruptures`' PELT change-point algorithm
+  (`model="l2", min_size=2, jump=1` — `jump=1` matters: ruptures' default
+  `jump=5` only considers every 5th index as a candidate breakpoint, which
+  silently misses everything on the short per-call sequences this operates
+  on) over the sentiment score sequence, and picks whichever detected
+  breakpoint has the most negative before/after mean shift. Returns
+  `{"turn_index": null, "description": "no clear pivot detected"}` — not an
+  error — when no breakpoint is found or no shift is negative (e.g. sentiment
+  stayed flat, or only rose).
+- `generate_recommendation()` (`recommendation.py`) sends the full
+  speaker-tagged transcript + sentiment trajectory + emotion tags + pivot
+  point to Claude (`claude-opus-5`, `ANTHROPIC_API_KEY` from `.env`), forcing
+  a `submit_call_analysis` tool call (`strict: true`) so the reply is
+  guaranteed-valid JSON rather than parsed free text. Retries once on
+  failure; raises a clear `RuntimeError` if the key is missing or rejected.
+- `analyze_call()` (`analyze.py`) runs all of the above and returns the full
+  Stage 3 schema shown here.
+
 ## Tests
 
 ```bash
 pytest
 ```
 
-`tests/test_stage1_asr.py` and the end-to-end case in
-`tests/test_stage2_diarization.py` transcribe/diarize whatever call recording
-they find in `sample_audio/`. If that folder is empty, or `HF_TOKEN` isn't
-set, they skip (with a message) instead of failing — add a real recording
-and/or set `HF_TOKEN` to actually exercise them. The rest of
-`test_stage2_diarization.py` (merge + role-assignment logic) runs against
-synthetic data and needs neither.
+`tests/test_stage1_asr.py` and the end-to-end cases in
+`tests/test_stage2_diarization.py` / `tests/test_stage3_recommendations.py`
+transcribe/diarize/analyze whatever call recording they find in
+`sample_audio/`. If that folder is empty, `HF_TOKEN` isn't set, or
+`ANTHROPIC_API_KEY` isn't set, they skip (with a message) instead of
+failing — add a real recording and/or set those keys to actually exercise
+them. Everything else — merge/role-assignment logic, sentiment/emotion
+scoring, pivot detection, and the Stage 3 LLM call (mocked) — runs against
+synthetic data and needs none of that.
