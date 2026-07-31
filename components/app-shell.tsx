@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   ListChecks,
   MessagesSquare,
+  Mic,
   Moon,
   PanelLeft,
   Phone,
@@ -25,6 +26,7 @@ import {
   Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/button-link";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
   CommandDialog,
@@ -172,6 +174,12 @@ function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
           <p className="text-[15px] font-semibold tracking-tight">Clearline</p>
           <p className="text-[11px] text-muted-foreground">Call Audit Platform</p>
         </div>
+      </div>
+      <div className="px-3 pb-4">
+        <ButtonLink href="/new-call" className="w-full justify-center" onClick={onNavigate}>
+          <Mic className="size-4" />
+          New call
+        </ButtonLink>
       </div>
       <div className="flex-1 overflow-y-auto pb-4 thin-scroll">
         <NavLinks onNavigate={onNavigate} />

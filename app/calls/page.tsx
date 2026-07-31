@@ -141,9 +141,9 @@ export default function CallsPage() {
             : "All audited calls, ranked by risk tier so the riskiest and least certain conversations surface first."
         }
       >
-        <Button variant="outline" size="sm">
+        <ButtonLink href="/new-call" variant="outline" size="sm">
           <Upload className="size-4" /> Upload recording
-        </Button>
+        </ButtonLink>
       </PageHeader>
 
       {/* Toolbar */}
