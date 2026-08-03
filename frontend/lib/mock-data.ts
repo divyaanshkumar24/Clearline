@@ -404,7 +404,10 @@ export function deriveTier(scores: CriterionScore[]): RiskTier {
   let nonCriticalFail = false;
   for (const s of scores) {
     const label = s.override?.label ?? s.label;
-    const sev = crits.get(s.criterionId)!.severity;
+    // Fall back to "critical" (not "medium") for an unrecognized criterionId —
+    // e.g. the backend and this rubric catalog drifting out of sync — so a
+    // contract mismatch under-reports risk loudly rather than silently.
+    const sev = crits.get(s.criterionId)?.severity ?? "critical";
     if (label === "fail" && sev === "critical") return "critical";
     if (label === "fail") nonCriticalFail = true;
     if (label === "flag") flags++;
@@ -554,8 +557,20 @@ export function getReviewer(id?: string): Reviewer | undefined {
   return REVIEWERS.find((r) => r.id === id);
 }
 
+const UNKNOWN_CRITERION: Criterion = {
+  id: "unknown",
+  code: "N/A",
+  name: "Unknown criterion",
+  description: "This criterion id wasn't recognized against the current rubric catalog.",
+  severity: "critical",
+  category: "Conduct",
+};
+
 export function getCriterion(id: string): Criterion {
-  return CRITERIA.find((c) => c.id === id)!;
+  // Falls back instead of throwing — a real backend call's criterionId (see
+  // lib/live-call.ts's remapCriterionId) is the one place this list can drift
+  // out of sync with CRITERIA below without a type error to catch it.
+  return CRITERIA.find((c) => c.id === id) ?? UNKNOWN_CRITERION;
 }
 
 /* ------------------------------------------------------------------ */

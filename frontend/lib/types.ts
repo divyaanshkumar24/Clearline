@@ -92,6 +92,17 @@ export interface TranscriptSegment {
   evidenceOf?: string[];
 }
 
+export interface CallRecommendation {
+  whatWentWrong: string;
+  rootCause: string;
+  repairSuggestion: string;
+}
+
+export interface CallPivotPoint {
+  timestamp: number | null;
+  description: string;
+}
+
 export interface Call {
   id: string;
   reference: string;
@@ -110,6 +121,10 @@ export interface Call {
   reviewerId?: string;
   summary: string;
   adversarial?: boolean;
+  /** Only present for calls analyzed live through /new-call — the LLM's root-cause/repair writeup. */
+  recommendation?: CallRecommendation;
+  /** Only present for calls analyzed live through /new-call. */
+  pivotPoint?: CallPivotPoint;
 }
 
 export interface ActivityEvent {

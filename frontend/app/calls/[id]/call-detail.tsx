@@ -710,6 +710,44 @@ export function CallDetail({ callId }: { callId: string }) {
 
             {/* Coaching tab */}
             <TabsContent value="coaching" className="mt-3 space-y-3">
+              {call.recommendation ? (
+                <Card className="gap-0 py-0 border-primary/30 bg-primary/5">
+                  <CardContent className="p-4">
+                    <p className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
+                      <Sparkles className="size-3.5 text-primary" /> AI recommendation
+                      {call.pivotPoint?.timestamp != null ? (
+                        <button
+                          className="ml-auto font-mono text-[11px] text-primary hover:underline"
+                          onClick={() => jumpTo(call.pivotPoint!.timestamp!)}
+                        >
+                          Pivot @ {fmtTimestamp(call.pivotPoint.timestamp)}
+                        </button>
+                      ) : null}
+                    </p>
+                    <div className="mt-2.5 space-y-2 text-[12.5px] leading-relaxed">
+                      <p>
+                        <span className="font-medium text-foreground">What went wrong: </span>
+                        <span className="text-muted-foreground">
+                          {call.recommendation.whatWentWrong}
+                        </span>
+                      </p>
+                      <p>
+                        <span className="font-medium text-foreground">Root cause: </span>
+                        <span className="text-muted-foreground">
+                          {call.recommendation.rootCause}
+                        </span>
+                      </p>
+                      <p>
+                        <span className="font-medium text-foreground">Suggested repair: </span>
+                        <span className="text-muted-foreground">
+                          {call.recommendation.repairSuggestion}
+                        </span>
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : null}
+
               {/* Objective metrics */}
               <Card className="gap-0 py-0">
                 <CardContent className="p-4">

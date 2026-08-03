@@ -109,10 +109,13 @@ def diarize_call(audio_path: str, dual_channel: bool = False) -> List[Dict]:
     pipeline = _load_diarization_pipeline()
     output = pipeline(str(Path(audio_path)))
     # pyannote.audio 4.x's SpeakerDiarization pipeline returns a DiarizeOutput
-    # dataclass rather than a bare Annotation. exclusive_speaker_diarization has
+    # dataclass rather than a bare Annotation; exclusive_speaker_diarization has
     # overlapping speech turns resolved — exactly what merging with an ASR
-    # transcript (one speaker per segment) needs.
-    diarization = output.exclusive_speaker_diarization
+    # transcript (one speaker per segment) needs. requirements.txt doesn't pin
+    # pyannote.audio, so a pre-4.x install (bare Annotation, no such attribute)
+    # is possible — fall back to using the output directly rather than raising
+    # an opaque AttributeError.
+    diarization = getattr(output, "exclusive_speaker_diarization", output)
 
     return [
         {"start": round(turn.start, 3), "end": round(turn.end, 3), "speaker": speaker}

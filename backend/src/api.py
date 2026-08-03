@@ -4,6 +4,8 @@ Run with:
     uvicorn src.api:app --reload
 """
 
+import logging
+import os
 import shutil
 import uuid
 from pathlib import Path
@@ -13,6 +15,8 @@ from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadF
 from fastapi.middleware.cors import CORSMiddleware
 
 from .pipeline import run_pipeline
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 UPLOAD_DIR = PROJECT_ROOT / "uploads"
@@ -39,6 +43,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# HF_TOKEN/NVIDIA_API_KEY are only ever checked deep inside a background job
+# (stage2_diarization/diarization.py, stage3_recommendations/recommendation.py),
+# so a missing key otherwise only surfaces as a job that fails a minute into
+# processing. Warn loudly at startup so a misconfigured .env is obvious before
+# anyone clicks "Analyze call".
+if not os.environ.get("HF_TOKEN"):
+    logger.warning(
+        "HF_TOKEN is not set — every call will fail at the diarization stage. "
+        "See .env.example."
+    )
+if not os.environ.get("NVIDIA_API_KEY"):
+    logger.warning(
+        "NVIDIA_API_KEY is not set — every call will fail at the recommendation "
+        "stage. See .env.example."
+    )
+
+
+@app.get("/health")
+async def health() -> Dict:
+    """Report whether the credentials each pipeline stage needs are configured,
+    without running anything — lets the frontend (or a developer) tell "backend
+    isn't running" apart from "backend is running but will fail every call"."""
+    return {
+        "status": "ok",
+        "hf_token_configured": bool(os.environ.get("HF_TOKEN")),
+        "nvidia_api_key_configured": bool(os.environ.get("NVIDIA_API_KEY")),
+    }
 
 
 def _process_call(call_id: str, audio_path: Path, dual_channel: bool) -> None:

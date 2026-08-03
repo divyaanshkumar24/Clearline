@@ -20,5 +20,18 @@ def label_speakers(asr_result: Dict, audio_path: str, dual_channel: bool = False
     """
     diarization_segments = diarize_call(audio_path, dual_channel=dual_channel)
     merged = merge_transcript_with_speakers(asr_result["segments"], diarization_segments)
-    labeled = assign_roles(merged)
+
+    # Mirror pipeline.py's guard: assign_roles() requires exactly 2 distinct
+    # speakers and raises ValueError otherwise (e.g. a single-speaker call).
+    # Without this, this function crashes on exactly the kind of short,
+    # one-person recording someone would use to smoke-test the CLI.
+    speaker_labels = {seg["speaker"] for seg in merged if seg.get("speaker")}
+    if len(speaker_labels) != 2:
+        labeled = merged
+    else:
+        try:
+            labeled = assign_roles(merged)
+        except ValueError:
+            labeled = merged
+
     return {"call_id": asr_result["call_id"], "segments": labeled}

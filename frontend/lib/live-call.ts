@@ -70,11 +70,25 @@ interface BackendCoachingFinding {
   severity: CoachingFinding["severity"];
 }
 
+interface BackendPivotPoint {
+  turn_index: number | null;
+  timestamp?: number;
+  description: string;
+}
+
+interface BackendRecommendation {
+  what_went_wrong: string;
+  root_cause: string;
+  repair_suggestion: string;
+}
+
 export interface BackendCallResult {
   call_id: string;
   segments: BackendSegment[];
   criterion_scores: BackendCriterionScore[];
   coaching_findings: BackendCoachingFinding[];
+  pivot_point?: BackendPivotPoint;
+  recommendation?: BackendRecommendation;
 }
 
 const FILLER_WORDS = /\b(um+|uh+|like|sort of|kind of|basically|you know)\b/gi;
@@ -199,6 +213,23 @@ export function adaptLiveCall(result: BackendCallResult): {
     metrics,
     summary,
     adversarial: false,
+    ...(result.recommendation
+      ? {
+          recommendation: {
+            whatWentWrong: result.recommendation.what_went_wrong,
+            rootCause: result.recommendation.root_cause,
+            repairSuggestion: result.recommendation.repair_suggestion,
+          },
+        }
+      : {}),
+    ...(result.pivot_point
+      ? {
+          pivotPoint: {
+            timestamp: result.pivot_point.timestamp ?? null,
+            description: result.pivot_point.description,
+          },
+        }
+      : {}),
   };
 
   return { call, transcript };
