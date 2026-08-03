@@ -1,0 +1,15 @@
+faster-whisper
+pyannote.audio
+transformers
+torch
+ruptures
+openai
+python-dotenv
+pytest
+librosa
+soundfile
+jiwer
+fastapi
+uvicorn[standard]
+python-multipart
+httpx
