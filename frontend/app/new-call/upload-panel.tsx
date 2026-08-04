@@ -4,7 +4,7 @@ import * as React from "react";
 import { FileAudio, Loader2, RotateCcw, TriangleAlert, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { prepareAudioForUpload, formatBytes } from "@/lib/audio";
+import { prepareAudioForUpload, formatBytes, type PendingAudio } from "@/lib/audio";
 import { cn } from "@/lib/utils";
 
 type Phase = "idle" | "processing" | "ready" | "error";
@@ -17,11 +17,12 @@ function hasAcceptedExtension(filename: string): boolean {
   return ACCEPTED_EXTENSIONS.some((ext) => lower.endsWith(ext));
 }
 
-export function UploadPanel({ onReady }: { onReady: (file: File | null) => void }) {
+export function UploadPanel({ onReady }: { onReady: (audio: PendingAudio | null) => void }) {
   const [phase, setPhase] = React.useState<Phase>("idle");
   const [isDragging, setIsDragging] = React.useState(false);
   const [fileName, setFileName] = React.useState<string | null>(null);
-  const [fileSize, setFileSize] = React.useState<number | null>(null);
+  const [uploadSize, setUploadSize] = React.useState<number | null>(null);
+  const [uploadChannels, setUploadChannels] = React.useState<number | null>(null);
   const [sizeWarning, setSizeWarning] = React.useState<string | null>(null);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [audioUrl, setAudioUrl] = React.useState<string | null>(null);
@@ -42,7 +43,8 @@ export function UploadPanel({ onReady }: { onReady: (file: File | null) => void 
     }
     setAudioUrl(null);
     setFileName(null);
-    setFileSize(null);
+    setUploadSize(null);
+    setUploadChannels(null);
     setSizeWarning(null);
     setErrorMessage(null);
     onReady(null);
@@ -68,15 +70,23 @@ export function UploadPanel({ onReady }: { onReady: (file: File | null) => void 
       }
 
       setFileName(file.name);
-      setFileSize(file.size);
       setPhase("processing");
       try {
-        const wavBlob = await prepareAudioForUpload(file);
-        const url = URL.createObjectURL(wavBlob);
+        // Keep both channels when the source has them — the backend's dual-channel
+        // mode needs the split intact, and a mono source stays mono regardless.
+        const { blob, sourceChannels, outputChannels } = await prepareAudioForUpload(file, {
+          preserveStereo: true,
+        });
+        const url = URL.createObjectURL(blob);
         audioUrlRef.current = url;
         setAudioUrl(url);
+        setUploadSize(blob.size);
+        setUploadChannels(outputChannels);
         setPhase("ready");
-        onReady(new File([wavBlob], "upload.wav", { type: "audio/wav" }));
+        onReady({
+          file: new File([blob], "upload.wav", { type: "audio/wav" }),
+          sourceChannels,
+        });
       } catch {
         setPhase("error");
         setErrorMessage("This file couldn't be read as audio. Try a different file.");
@@ -137,7 +147,9 @@ export function UploadPanel({ onReady }: { onReady: (file: File | null) => void 
         <div className="text-center">
           <p className="max-w-xs truncate text-sm font-medium">{fileName}</p>
           <p className="text-[13px] text-muted-foreground">
-            {fileSize !== null ? formatBytes(fileSize) : null} · ready to review
+            {uploadSize !== null ? `${formatBytes(uploadSize)} · ` : null}
+            {uploadChannels === 2 ? "2 channels · " : null}
+            ready to review
           </p>
         </div>
         {sizeWarning ? (

@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 from typing import Dict, Optional
 
+import soundfile as sf
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -104,6 +105,27 @@ async def create_call(
     with audio_path.open("wb") as out_file:
         shutil.copyfileobj(file.file, out_file)
     await file.close()
+
+    # Diarization would otherwise raise on a mono file only *after* the full ASR
+    # pass (~40% progress, minutes in). sf.info reads the header only, so this
+    # turns a slow silent failure into an immediate, actionable error.
+    if dual_channel:
+        try:
+            channels = sf.info(str(audio_path)).channels
+        except Exception as exc:
+            audio_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=400, detail=f"Could not read the uploaded audio: {exc}"
+            )
+        if channels < 2:
+            audio_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "dual_channel=true requires a stereo recording, but this file has "
+                    f"{channels} channel(s)."
+                ),
+            )
 
     JOBS[call_id] = {
         "stage": "queued",

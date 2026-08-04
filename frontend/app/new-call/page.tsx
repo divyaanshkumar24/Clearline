@@ -7,23 +7,38 @@ import { Mic, Upload as UploadIcon, Loader2, PhoneCall } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/shared";
 import { Reveal } from "@/components/motion";
+import type { PendingAudio } from "@/lib/audio";
 import { RecorderPanel } from "./recorder-panel";
 import { UploadPanel } from "./upload-panel";
 
 export default function NewCallPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = React.useState<"record" | "upload">("record");
-  const [pendingFile, setPendingFile] = React.useState<File | null>(null);
+  const [pendingAudio, setPendingAudio] = React.useState<PendingAudio | null>(null);
+  const [dualChannel, setDualChannel] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
 
+  // Only a genuinely two-channel source can use the backend's channel-split
+  // speaker attribution; anything else must go through AI diarization.
+  const isStereo = (pendingAudio?.sourceChannels ?? 0) >= 2;
+
+  const handleAudioReady = React.useCallback((audio: PendingAudio | null) => {
+    setPendingAudio(audio);
+    // Default the option on for a stereo source, and clear it whenever the
+    // audio is swapped or reset so a stale `true` can't outlive its file.
+    setDualChannel((audio?.sourceChannels ?? 0) >= 2);
+  }, []);
+
   const handleAnalyze = async () => {
-    if (!pendingFile) return;
+    if (!pendingAudio) return;
     setSubmitting(true);
     try {
       const formData = new FormData();
-      formData.append("file", pendingFile, pendingFile.name);
+      formData.append("file", pendingAudio.file, pendingAudio.file.name);
+      formData.append("dual_channel", String(dualChannel && isStereo));
 
       const response = await fetch("/api/calls", {
         method: "POST",
@@ -74,17 +89,34 @@ export default function NewCallPage() {
               </TabsList>
               <TabsContent value="record">
                 <RecorderPanel
-                  onReady={setPendingFile}
+                  onReady={handleAudioReady}
                   onRequestUploadTab={() => setActiveTab("upload")}
                 />
               </TabsContent>
               <TabsContent value="upload">
-                <UploadPanel onReady={setPendingFile} />
+                <UploadPanel onReady={handleAudioReady} />
+                {isStereo ? (
+                  <label className="mt-1 flex items-start gap-2.5 rounded-lg border bg-muted/30 px-3 py-2.5 text-[13px]">
+                    <Checkbox
+                      className="mt-0.5"
+                      checked={dualChannel}
+                      onCheckedChange={(value) => setDualChannel(value === true)}
+                    />
+                    <span>
+                      Two-channel recording
+                      <span className="block text-[11.5px] leading-relaxed text-muted-foreground">
+                        Detected 2 channels. Channel 1 is treated as the rep and channel 2 as the
+                        client — this skips AI diarization and attributes every line by channel,
+                        which is exact rather than inferred.
+                      </span>
+                    </span>
+                  </label>
+                ) : null}
               </TabsContent>
             </Tabs>
           </CardContent>
           <CardFooter className="justify-end gap-2">
-            <Button onClick={handleAnalyze} disabled={!pendingFile || submitting}>
+            <Button onClick={handleAnalyze} disabled={!pendingAudio || submitting}>
               {submitting ? (
                 <>
                   <Loader2 className="animate-spin" /> Starting analysis…

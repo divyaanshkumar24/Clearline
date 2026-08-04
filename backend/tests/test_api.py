@@ -1,7 +1,9 @@
 import time
 from pathlib import Path
 
+import numpy as np
 import pytest
+import soundfile as sf
 from fastapi.testclient import TestClient
 
 from src import api
@@ -87,6 +89,80 @@ def test_upload_poll_and_fetch_result(monkeypatch):
     assert result["recommendation"] == FAKE_RECOMMENDATION
     assert result["criterion_scores"] == FAKE_CRITERION_SCORES
     assert result["coaching_findings"] == FAKE_COACHING_FINDINGS
+
+
+def _write_silent_wav(path: Path, channels: int, seconds: float = 0.5, sample_rate: int = 16000):
+    frames = np.zeros((int(sample_rate * seconds), channels), dtype="float32")
+    sf.write(str(path), frames, sample_rate)
+    return path
+
+
+@pytest.fixture
+def upload_client(tmp_path, monkeypatch):
+    """TestClient with an isolated upload dir and the pipeline stubbed out.
+
+    Returns (client, calls) where `calls` collects the dual_channel value the
+    background task would have received.
+    """
+    upload_dir = tmp_path / "uploads"
+    monkeypatch.setattr(api, "UPLOAD_DIR", upload_dir)
+
+    calls = []
+    monkeypatch.setattr(
+        api,
+        "_process_call",
+        lambda call_id, audio_path, dual_channel: calls.append(dual_channel),
+    )
+    return TestClient(api.app), calls, upload_dir
+
+
+def test_dual_channel_rejects_mono_upload(upload_client, tmp_path):
+    client, calls, upload_dir = upload_client
+    mono = _write_silent_wav(tmp_path / "mono.wav", channels=1)
+
+    with mono.open("rb") as f:
+        response = client.post(
+            "/calls",
+            files={"file": ("mono.wav", f, "audio/wav")},
+            data={"dual_channel": "true"},
+        )
+
+    assert response.status_code == 400
+    assert "stereo" in response.json()["detail"]
+    # The rejected upload must not be queued, nor left behind on disk.
+    assert calls == []
+    assert list(upload_dir.glob("*")) == []
+
+
+def test_mono_upload_without_dual_channel_is_accepted(upload_client, tmp_path):
+    client, calls, _ = upload_client
+    mono = _write_silent_wav(tmp_path / "mono.wav", channels=1)
+
+    with mono.open("rb") as f:
+        response = client.post(
+            "/calls",
+            files={"file": ("mono.wav", f, "audio/wav")},
+            data={"dual_channel": "false"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "processing"
+    assert calls == [False]
+
+
+def test_dual_channel_accepts_stereo_upload(upload_client, tmp_path):
+    client, calls, _ = upload_client
+    stereo = _write_silent_wav(tmp_path / "stereo.wav", channels=2)
+
+    with stereo.open("rb") as f:
+        response = client.post(
+            "/calls",
+            files={"file": ("stereo.wav", f, "audio/wav")},
+            data={"dual_channel": "true"},
+        )
+
+    assert response.status_code == 200
+    assert calls == [True]
 
 
 def test_status_for_unknown_call_id():

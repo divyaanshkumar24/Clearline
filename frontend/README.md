@@ -40,6 +40,7 @@ localStorage — no real auth):
 | `/review` | Human review workspace — queue, model-vs-human comparison, approvals, audit history |
 | `/rubrics` | Rubric management — version history, rule table, diff viewer, re-audit |
 | `/export` | Export preview — paper-accurate audit PDF layout |
+| `/new-call` | Record or upload a call and run the real backend pipeline — polls `/calls/[id]/processing`, then routes to the live call detail |
 
 ## Stack
 
@@ -60,3 +61,9 @@ Next.js (App Router) · React · TypeScript · Tailwind CSS v4 · shadcn/ui (Bas
   (with `nativeButton={false}` for links), not Radix's `asChild`.
 - Entrance animations are CSS-driven (`tw-animate-css`) so they complete even
   when rAF is throttled; chart animations are disabled for instant render.
+- `lib/audio.ts` — every upload/recording is decoded in the browser and
+  re-encoded as 16 kHz PCM WAV, because the backend's `soundfile` can't read
+  WebM/Opus or M4A. Channel count is preserved for uploads: a stereo file keeps
+  both channels so `/new-call` can offer the backend's `dual_channel` mode
+  (channel 1 = rep, channel 2 = client, no AI diarization). Mono is never
+  upmixed — that would hand the backend two identical speakers.

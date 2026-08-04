@@ -4,7 +4,7 @@ import * as React from "react";
 import { Loader2, Mic, RotateCcw, Square, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { prepareAudioForUpload, formatDuration } from "@/lib/audio";
+import { prepareAudioForUpload, formatDuration, type PendingAudio } from "@/lib/audio";
 import { cn } from "@/lib/utils";
 
 type Phase = "idle" | "requesting" | "recording" | "processing" | "ready" | "denied" | "error";
@@ -25,7 +25,7 @@ export function RecorderPanel({
   onReady,
   onRequestUploadTab,
 }: {
-  onReady: (file: File | null) => void;
+  onReady: (audio: PendingAudio | null) => void;
   onRequestUploadTab: () => void;
 }) {
   const [phase, setPhase] = React.useState<Phase>("idle");
@@ -129,12 +129,17 @@ export function RecorderPanel({
         const rawBlob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
         setPhase("processing");
         try {
-          const wavBlob = await prepareAudioForUpload(rawBlob);
-          const url = URL.createObjectURL(wavBlob);
+          // Mic capture is a single source — always mono, so the dual-channel
+          // option is never offered for a recording.
+          const { blob } = await prepareAudioForUpload(rawBlob);
+          const url = URL.createObjectURL(blob);
           audioUrlRef.current = url;
           setAudioUrl(url);
           setPhase("ready");
-          onReady(new File([wavBlob], "recording.wav", { type: "audio/wav" }));
+          onReady({
+            file: new File([blob], "recording.wav", { type: "audio/wav" }),
+            sourceChannels: 1,
+          });
         } catch {
           setPhase("error");
           setErrorMessage("Could not process the recording. Please try again.");

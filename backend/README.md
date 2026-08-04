@@ -284,7 +284,7 @@ uvicorn src.api:app --reload
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `/calls` | `POST` | Multipart upload (`file`, optional `dual_channel` form field). Saves the audio to `uploads/`, starts the pipeline as a background task, returns `{"call_id", "status": "processing"}` immediately. |
+| `/calls` | `POST` | Multipart upload (`file`, optional `dual_channel` form field). Saves the audio to `uploads/`, starts the pipeline as a background task, returns `{"call_id", "status": "processing"}` immediately. With `dual_channel=true` the channel count is checked up front and a mono file is rejected with `400` — otherwise diarization would only fail after the full ASR pass. |
 | `/calls/{call_id}/status` | `GET` | `{"call_id", "stage", "progress_pct"}` — `stage` is one of `queued` / `transcribing` / `diarizing` / `analyzing` / `done` / `failed` (with an `error` field when failed). |
 | `/calls/{call_id}` | `GET` | Once `stage == "done"`, the full combined report (same schema `run_pipeline()` returns). `409` while still processing, `500` if the pipeline failed, `404` for an unknown `call_id`. |
 
