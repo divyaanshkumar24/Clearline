@@ -465,6 +465,17 @@ export function CallDetail({ callId }: { callId: string }) {
             </div>
 
             {/* Transcript */}
+            {call.speakerAttributionUnreliable ? (
+              <div className="mx-5 mt-4 flex items-start gap-2.5 rounded-lg border border-status-warning/30 bg-status-warning/5 px-3.5 py-2.5">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning-fg" />
+                <p className="text-[11.5px] leading-relaxed text-status-warning-fg">
+                  Only one voice was separated in this recording, so every line below is
+                  attributed to the rep by default rather than measured. Talk-ratio and
+                  interruption metrics are not meaningful here. Record both sides — or
+                  upload a two-channel recording — for real speaker attribution.
+                </p>
+              </div>
+            ) : null}
             <div
               ref={transcriptRef}
               className="max-h-[640px] space-y-4 overflow-y-auto p-5 thin-scroll"

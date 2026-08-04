@@ -549,8 +549,21 @@ export function getCall(id: string): Call | undefined {
   return CALLS.find((c) => c.id === id);
 }
 
+const UNKNOWN_REP: Representative = {
+  id: "unknown",
+  name: "Unknown rep",
+  initials: "—",
+  team: "Unassigned",
+  tenure: "—",
+  hue: 0,
+};
+
 export function getRep(id: string): Representative {
-  return REPRESENTATIVES.find((r) => r.id === id)!;
+  // Falls back instead of returning undefined — calls analyzed live carry a
+  // repId that isn't in this mock roster (see live-call.ts's LIVE_REP), and a
+  // non-null assertion here crashes every screen that renders rep.name.
+  // Prefer resolveRep() from lib/live-call.ts, which maps LIVE_REP properly.
+  return REPRESENTATIVES.find((r) => r.id === id) ?? UNKNOWN_REP;
 }
 
 export function getReviewer(id?: string): Reviewer | undefined {

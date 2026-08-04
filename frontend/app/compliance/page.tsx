@@ -32,7 +32,9 @@ import {
   RepAvatar,
 } from "@/components/shared";
 import { Reveal, Stagger } from "@/components/motion";
-import { CALLS, CRITERIA, RUBRIC_VERSIONS, getRep } from "@/lib/mock-data";
+import { CALLS, CRITERIA, RUBRIC_VERSIONS } from "@/lib/mock-data";
+import { resolveRep } from "@/lib/live-call";
+import { useLiveCalls } from "@/lib/use-live-calls";
 import { effectiveLabel } from "@/lib/derived";
 import { fmtPct, fmtTimestamp } from "@/lib/format";
 import type { Severity } from "@/lib/types";
@@ -56,6 +58,11 @@ const SEVERITY_META: Record<Severity, { label: string; className: string }> = {
 
 function AdminCompliance() {
   const [version, setVersion] = React.useState("rub-24");
+
+  // Live-analyzed calls contribute to per-criterion posture too, otherwise the
+  // compliance view silently under-reports every call run through /new-call.
+  const { calls: liveCalls } = useLiveCalls();
+  const allCalls = React.useMemo(() => [...liveCalls, ...CALLS], [liveCalls]);
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-6 md:px-6 lg:px-8">
@@ -109,7 +116,7 @@ function AdminCompliance() {
 
       <Stagger className="space-y-3">
         {CRITERIA.map((crit) => {
-          const scores = CALLS.flatMap((c) =>
+          const scores = allCalls.flatMap((c) =>
             c.scores
               .filter((s) => s.criterionId === crit.id)
               .map((s) => ({ ...s, call: c })),
@@ -240,8 +247,8 @@ function AdminCompliance() {
                                     {s.call.reference}
                                   </Link>
                                   <span className="flex items-center gap-1.5 text-muted-foreground">
-                                    <RepAvatar rep={getRep(s.call.repId)} size="sm" className="size-4.5 text-[8px]" />
-                                    {getRep(s.call.repId).name}
+                                    <RepAvatar rep={resolveRep(s.call.repId)} size="sm" className="size-4.5 text-[8px]" />
+                                    {resolveRep(s.call.repId).name}
                                   </span>
                                   <span className="font-mono text-[11px] text-muted-foreground">
                                     evidence @ {fmtTimestamp(s.evidenceTs)}

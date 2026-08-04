@@ -148,13 +148,17 @@ export const HEATMAP = REPRESENTATIVES.map((rep) => {
 
 /* ---------------- Coaching aggregates ---------------- */
 
-export const COACHING_BY_TYPE = (() => {
+/** Finding-type breakdown for an arbitrary call set, so screens that merge in
+ *  live-analyzed calls can recompute rather than read the mock-only constant. */
+export function coachingByType(calls: Call[]): { type: string; count: number }[] {
   const map = new Map<string, number>();
-  for (const c of CALLS) for (const f of c.findings) map.set(f.type, (map.get(f.type) ?? 0) + 1);
+  for (const c of calls) for (const f of c.findings) map.set(f.type, (map.get(f.type) ?? 0) + 1);
   return [...map.entries()]
     .map(([type, count]) => ({ type, count }))
     .sort((a, b) => b.count - a.count);
-})();
+}
+
+export const COACHING_BY_TYPE = coachingByType(CALLS);
 
 export const COACHING_TREND = Array.from({ length: 8 }, (_, i) => {
   const weekStart = NOW - (7 - i) * 7 * DAY;

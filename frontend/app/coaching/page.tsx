@@ -1,3 +1,6 @@
+"use client";
+
+import * as React from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -21,26 +24,37 @@ import { CoachingTrendChart, ChartLegend } from "@/components/charts";
 import { KpiCard, PageHeader, RepAvatar } from "@/components/shared";
 import { Reveal, Stagger } from "@/components/motion";
 import { CALLS, REPRESENTATIVES } from "@/lib/mock-data";
-import { COACHING_BY_TYPE } from "@/lib/derived";
+import { coachingByType } from "@/lib/derived";
+import { LIVE_REP } from "@/lib/live-call";
+import { useLiveCalls } from "@/lib/use-live-calls";
 import { fmtDuration, fmtPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { RoleGate } from "@/components/role-gate";
 import { RepCoaching } from "@/components/rep-coaching";
 
 function AdminCoaching() {
-  const totalCalls = CALLS.length;
-  const avgTalk =
-    CALLS.reduce((a, c) => a + c.metrics.talkRatioRep, 0) / totalCalls;
-  const avgInterruptions =
-    CALLS.reduce((a, c) => a + c.metrics.interruptions, 0) / totalCalls;
-  const avgMonologue =
-    CALLS.reduce((a, c) => a + c.metrics.longestMonologueSec, 0) / totalCalls;
-  const avgDiscovery =
-    CALLS.reduce((a, c) => a + c.metrics.discoveryQuestions, 0) / totalCalls;
-  const maxTypeCount = Math.max(...COACHING_BY_TYPE.map((t) => t.count));
+  // Live-analyzed calls count toward the coaching picture, not just the mock corpus.
+  const { calls: liveCalls } = useLiveCalls();
+  const allCalls = React.useMemo(() => [...liveCalls, ...CALLS], [liveCalls]);
 
-  const scorecards = REPRESENTATIVES.map((rep) => {
-    const calls = CALLS.filter((c) => c.repId === rep.id);
+  const totalCalls = allCalls.length;
+  const avgTalk =
+    allCalls.reduce((a, c) => a + c.metrics.talkRatioRep, 0) / totalCalls;
+  const avgInterruptions =
+    allCalls.reduce((a, c) => a + c.metrics.interruptions, 0) / totalCalls;
+  const avgMonologue =
+    allCalls.reduce((a, c) => a + c.metrics.longestMonologueSec, 0) / totalCalls;
+  const avgDiscovery =
+    allCalls.reduce((a, c) => a + c.metrics.discoveryQuestions, 0) / totalCalls;
+  const byType = React.useMemo(() => coachingByType(allCalls), [allCalls]);
+  const maxTypeCount = Math.max(...byType.map((t) => t.count), 1);
+
+  // Live calls aren't attributed to anyone in the mock roster, so they get their
+  // own scorecard rather than being dropped from this section entirely.
+  const roster = liveCalls.length ? [LIVE_REP, ...REPRESENTATIVES] : REPRESENTATIVES;
+
+  const scorecards = roster.map((rep) => {
+    const calls = allCalls.filter((c) => c.repId === rep.id);
     const n = Math.max(1, calls.length);
     const talk = calls.reduce((a, c) => a + c.metrics.talkRatioRep, 0) / n;
     const interruptions = calls.reduce((a, c) => a + c.metrics.interruptions, 0) / n;
@@ -139,7 +153,7 @@ function AdminCoaching() {
               <CardDescription>All coaching observations, 45 days</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2.5">
-              {COACHING_BY_TYPE.map((t) => (
+              {byType.map((t) => (
                 <div key={t.type} className="flex items-center gap-3">
                   <span className="w-40 truncate text-[12.5px]">{t.type}</span>
                   <div className="h-4 flex-1 overflow-hidden rounded-[3px] bg-muted">
@@ -267,7 +281,7 @@ function AdminCoaching() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
-            {CALLS.flatMap((c) =>
+            {allCalls.flatMap((c) =>
               c.findings
                 .filter(
                   (f) =>

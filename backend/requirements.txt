@@ -1,15 +1,31 @@
-faster-whisper
-pyannote.audio
-transformers
-torch
-ruptures
-openai
-python-dotenv
-pytest
-librosa
-soundfile
-jiwer
-fastapi
-uvicorn[standard]
-python-multipart
-httpx
+# Pinned to the set verified end-to-end on Python 3.11 (macOS/arm64): a real
+# stereo call ran the full pipeline — faster-whisper ASR, pyannote diarization,
+# both transformer sentiment/emotion models, and the NVIDIA NIM calls — to a
+# complete report.
+#
+# Direct dependencies only; transitive versions are left to the resolver. If you
+# need a byte-identical environment, generate a full lock with
+# `pip freeze > requirements.lock.txt` from a known-good venv.
+#
+# Python 3.11 is the tested interpreter. 3.9 will not resolve — several of these
+# publish no wheels for it.
+
+faster-whisper==1.2.1
+pyannote.audio==4.0.7
+transformers==5.14.1
+torch==2.13.0
+ruptures==1.1.10
+openai==2.53.0
+python-dotenv==1.2.2
+pytest==9.1.1
+librosa==0.11.0
+soundfile==0.14.0
+jiwer==4.0.0
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+python-multipart==0.0.32
+httpx==0.28.1
+
+# numpy is transitive (torch/librosa/soundfile) but pinned deliberately: the 1.x
+# to 2.x ABI break surfaces as import-time crashes in compiled audio deps.
+numpy==2.4.6

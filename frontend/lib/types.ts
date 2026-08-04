@@ -125,6 +125,13 @@ export interface Call {
   recommendation?: CallRecommendation;
   /** Only present for calls analyzed live through /new-call. */
   pivotPoint?: CallPivotPoint;
+  /**
+   * Set for live calls where diarization separated fewer than two voices (or
+   * couldn't tell rep from client). Speaker attribution on those calls is a
+   * fallback, not a measurement, and the UI says so instead of presenting it
+   * with the same confidence as a real two-party call.
+   */
+  speakerAttributionUnreliable?: boolean;
 }
 
 export interface ActivityEvent {

@@ -77,9 +77,11 @@ def run_pipeline(
             audio_path,
         )
         labeled_segments = merged
+        roles_assigned = False
     else:
         try:
             labeled_segments = assign_roles(merged)
+            roles_assigned = True
         except ValueError as exc:
             logger.warning(
                 "Role assignment failed for %s (%s) — keeping raw diarization labels.",
@@ -87,6 +89,7 @@ def run_pipeline(
                 exc,
             )
             labeled_segments = merged
+            roles_assigned = False
 
     _report("analyzing")
     logger.info("Stage 3: scoring sentiment/emotion, detecting pivot, generating recommendation")
@@ -96,6 +99,12 @@ def run_pipeline(
 
     return {
         "call_id": stage3_result["call_id"],
+        # How many voices were actually separated, and whether they could be told
+        # apart as rep vs client. Without this the frontend can't distinguish a
+        # real two-party call from a one-voice recording whose segments all fall
+        # back to "rep" — the attribution looks equally confident either way.
+        "speaker_count": len(speaker_labels),
+        "roles_assigned": roles_assigned,
         "segments": labeled_segments,
         "sentiment_trajectory": stage3_result["sentiment_trajectory"],
         "emotion_tags": stage3_result["emotion_tags"],

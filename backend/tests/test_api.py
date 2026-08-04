@@ -77,6 +77,8 @@ def test_upload_poll_and_fetch_result(monkeypatch):
 
     assert set(result.keys()) == {
         "call_id",
+        "speaker_count",
+        "roles_assigned",
         "segments",
         "sentiment_trajectory",
         "emotion_tags",
@@ -106,6 +108,8 @@ def upload_client(tmp_path, monkeypatch):
     """
     upload_dir = tmp_path / "uploads"
     monkeypatch.setattr(api, "UPLOAD_DIR", upload_dir)
+    monkeypatch.setattr(api, "CALLS_DIR", tmp_path / "calls")
+    monkeypatch.setattr(api, "JOBS", {})
 
     calls = []
     monkeypatch.setattr(
@@ -163,6 +167,88 @@ def test_dual_channel_accepts_stereo_upload(upload_client, tmp_path):
 
     assert response.status_code == 200
     assert calls == [True]
+
+
+def _finished_job(call_id: str, created_at: float, timings=None):
+    return {
+        "stage": "done",
+        "progress_pct": 100,
+        "result": {"call_id": call_id, "segments": [], "criterion_scores": []},
+        "error": None,
+        "created_at": created_at,
+        "stage_timings": timings or {"transcribing": 1.5},
+    }
+
+
+def test_list_calls_returns_finished_calls_newest_first(upload_client):
+    client, _, _ = upload_client
+    api.JOBS["old"] = _finished_job("old", created_at=1000.0)
+    api.JOBS["new"] = _finished_job("new", created_at=2000.0)
+
+    body = client.get("/calls").json()
+
+    assert [c["call_id"] for c in body["calls"]] == ["new", "old"]
+    # Dashboard metadata rides along so the frontend needs no second request.
+    assert body["calls"][0]["stage_timings"] == {"transcribing": 1.5}
+    assert body["calls"][0]["created_at"] == 2000.0
+
+
+def test_list_calls_excludes_unfinished_jobs(upload_client):
+    client, _, _ = upload_client
+    api.JOBS["done"] = _finished_job("done", created_at=time.time())
+    api.JOBS["running"] = {
+        "stage": "transcribing", "progress_pct": 0, "result": None,
+        "error": None, "created_at": time.time(), "stage_timings": {},
+    }
+    api.JOBS["broken"] = {
+        "stage": "failed", "progress_pct": 40, "result": None,
+        "error": "boom", "created_at": time.time(), "stage_timings": {},
+    }
+
+    assert [c["call_id"] for c in client.get("/calls").json()["calls"]] == ["done"]
+
+
+def test_watchdog_fails_a_job_that_outlived_its_budget(upload_client, monkeypatch):
+    client, _, _ = upload_client
+    monkeypatch.setattr(api, "JOB_TIMEOUT_SEC", 60.0)
+    # A job whose process died mid-run: still "transcribing", never updated again.
+    api.JOBS["stuck"] = {
+        "stage": "transcribing", "progress_pct": 0, "result": None,
+        "error": None, "created_at": time.time() - 3600, "stage_timings": {},
+    }
+
+    body = client.get("/calls/stuck/status").json()
+
+    assert body["stage"] == "failed"
+    assert "stopped responding" in body["error"]
+    assert "transcribing" in body["error"]
+    # And the result endpoint agrees rather than reporting "still processing".
+    assert client.get("/calls/stuck").status_code == 500
+
+
+def test_watchdog_leaves_a_job_inside_its_budget_alone(upload_client, monkeypatch):
+    client, _, _ = upload_client
+    monkeypatch.setattr(api, "JOB_TIMEOUT_SEC", 3600.0)
+    api.JOBS["fresh"] = {
+        "stage": "transcribing", "progress_pct": 0, "result": None,
+        "error": None, "created_at": time.time() - 5, "stage_timings": {},
+    }
+
+    assert client.get("/calls/fresh/status").json()["stage"] == "transcribing"
+
+
+def test_finished_calls_survive_a_restart(upload_client):
+    """Job state is in-process, so a finished call is written to disk and read
+    back on import — otherwise a restart 404s every previously analyzed call."""
+    _, _, _ = upload_client
+    api.JOBS["kept"] = _finished_job("kept", created_at=1234.0)
+    api._persist_job("kept")
+
+    api.JOBS.clear()
+    api._load_persisted_jobs()
+
+    assert api.JOBS["kept"]["stage"] == "done"
+    assert api.JOBS["kept"]["result"]["call_id"] == "kept"
 
 
 def test_status_for_unknown_call_id():

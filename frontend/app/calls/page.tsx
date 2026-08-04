@@ -48,7 +48,9 @@ import {
   StatusChip,
 } from "@/components/shared";
 import { Reveal } from "@/components/motion";
-import { CALLS, CRITERIA, REPRESENTATIVES, getRep } from "@/lib/mock-data";
+import { CALLS, CRITERIA, REPRESENTATIVES } from "@/lib/mock-data";
+import { resolveRep } from "@/lib/live-call";
+import { useLiveCalls } from "@/lib/use-live-calls";
 import { callComplianceRate, effectiveLabel } from "@/lib/derived";
 import { fmtDateTime, fmtDuration, fmtPct } from "@/lib/format";
 import type { Call, RiskTier } from "@/lib/types";
@@ -72,6 +74,11 @@ export default function CallsPage() {
   const [preview, setPreview] = React.useState<Call | null>(null);
   const [loading, setLoading] = React.useState(true);
 
+  // Calls analyzed for real through /new-call, listed alongside the mock corpus
+  // rather than being reachable only by direct link.
+  const { calls: liveCalls } = useLiveCalls();
+  const allCalls = React.useMemo(() => [...liveCalls, ...CALLS], [liveCalls]);
+
   // Simulated fetch for skeleton states + deep-link filter (?rep=)
   React.useEffect(() => {
     const repParam = new URLSearchParams(window.location.search).get("rep");
@@ -82,14 +89,14 @@ export default function CallsPage() {
   }, []);
 
   const filtered = React.useMemo(() => {
-    let rows = CALLS.filter((c) => {
+    let rows = allCalls.filter((c) => {
       if (isRep && c.repId !== REP_PERSONA.id) return false;
       if (tier !== "all" && c.riskTier !== tier) return false;
       if (status !== "all" && c.status !== status) return false;
       if (!isRep && rep !== "all" && c.repId !== rep) return false;
       if (query) {
         const q = query.toLowerCase();
-        const r = getRep(c.repId);
+        const r = resolveRep(c.repId);
         if (
           !c.reference.toLowerCase().includes(q) &&
           !r.name.toLowerCase().includes(q) &&
@@ -116,7 +123,7 @@ export default function CallsPage() {
       }
     });
     return rows;
-  }, [query, tier, status, rep, sort, isRep]);
+  }, [allCalls, query, tier, status, rep, sort, isRep]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
@@ -205,11 +212,11 @@ export default function CallsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All representatives</SelectItem>
-              {CALLS.map((c) => c.repId)
+              {allCalls.map((c) => c.repId)
                 .filter((v, i, a) => a.indexOf(v) === i)
                 .map((id) => (
                   <SelectItem key={id} value={id}>
-                    {getRep(id).name}
+                    {resolveRep(id).name}
                   </SelectItem>
                 ))}
             </SelectContent>
@@ -289,7 +296,7 @@ export default function CallsPage() {
                 </TableHeader>
                 <TableBody>
                   {rows.map((call) => {
-                    const repObj = getRep(call.repId);
+                    const repObj = resolveRep(call.repId);
                     const rate = callComplianceRate(call);
                     return (
                       <TableRow
@@ -429,7 +436,7 @@ export default function CallsPage() {
                   <StatusChip status={preview.status} />
                 </div>
                 <p className="text-[12.5px] text-muted-foreground">
-                  {getRep(preview.repId).name} · {preview.clientAlias} ·{" "}
+                  {resolveRep(preview.repId).name} · {preview.clientAlias} ·{" "}
                   {fmtDateTime(preview.date)} · {fmtDuration(preview.durationSec)}
                 </p>
               </SheetHeader>

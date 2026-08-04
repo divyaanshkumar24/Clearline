@@ -4,6 +4,29 @@ import { NextResponse } from "next/server";
 // backend's default uvicorn port for development.
 const BACKEND_API_URL = process.env.BACKEND_API_URL ?? "http://localhost:8000";
 
+export async function GET() {
+  let backendResponse: Response;
+  try {
+    backendResponse = await fetch(`${BACKEND_API_URL}/calls`, { cache: "no-store" });
+  } catch {
+    // The rest of the app is driven by mock data and stays usable without the
+    // backend, so a missing analysis service degrades to "no live calls" rather
+    // than breaking every page that merges them in.
+    return NextResponse.json({ calls: [], unreachable: true });
+  }
+
+  const data = await backendResponse.json().catch(() => null);
+
+  if (!backendResponse.ok) {
+    return NextResponse.json(
+      { error: data?.detail ?? "The backend could not list calls." },
+      { status: backendResponse.status },
+    );
+  }
+
+  return NextResponse.json(data);
+}
+
 export async function POST(request: Request) {
   let incomingForm: FormData;
   try {

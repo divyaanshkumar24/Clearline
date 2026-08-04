@@ -15,6 +15,8 @@ AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aiff", ".aif"}
 
 EXPECTED_TOP_LEVEL_KEYS = {
     "call_id",
+    "speaker_count",
+    "roles_assigned",
     "segments",
     "sentiment_trajectory",
     "emotion_tags",

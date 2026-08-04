@@ -1,4 +1,4 @@
-import { deriveTier, getCriterion } from "./mock-data";
+import { deriveTier, getCriterion, getRep } from "./mock-data";
 import type {
   AudioMetrics,
   Call,
@@ -45,6 +45,11 @@ export const LIVE_REP: Representative = {
   hue: 210,
 };
 
+/** Rep for any call, mock or live. Live calls aren't in the mock roster. */
+export function resolveRep(id: string): Representative {
+  return id === LIVE_REP.id ? LIVE_REP : getRep(id);
+}
+
 interface BackendSegment {
   start: number;
   end: number;
@@ -84,6 +89,10 @@ interface BackendRecommendation {
 
 export interface BackendCallResult {
   call_id: string;
+  /** Distinct voices diarization separated. 1 means every line is one speaker. */
+  speaker_count?: number;
+  /** False when the two parties couldn't be told apart as rep vs client. */
+  roles_assigned?: boolean;
   segments: BackendSegment[];
   criterion_scores: BackendCriterionScore[];
   coaching_findings: BackendCoachingFinding[];
@@ -213,6 +222,10 @@ export function adaptLiveCall(result: BackendCallResult): {
     metrics,
     summary,
     adversarial: false,
+    // Older results predate these fields; absent means "assume it was fine"
+    // rather than warning on every previously analyzed call.
+    speakerAttributionUnreliable:
+      result.roles_assigned === false || (result.speaker_count ?? 2) < 2,
     ...(result.recommendation
       ? {
           recommendation: {

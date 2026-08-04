@@ -205,6 +205,10 @@ export default function LandingPage() {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
+    // Captured now rather than read in cleanup: by the time cleanup runs the ref
+    // may already point elsewhere, and focus must return to the button that
+    // opened this menu.
+    const menuButton = menuButtonRef.current;
     const panel = mobilePanelRef.current;
     const focusable = panel?.querySelectorAll<HTMLElement>(
       'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -236,7 +240,7 @@ export default function LandingPage() {
     return () => {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", onKeyDown);
-      menuButtonRef.current?.focus();
+      menuButton?.focus();
     };
   }, [mobileMenuOpen]);
 
