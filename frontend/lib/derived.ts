@@ -178,62 +178,6 @@ export const COACHING_TREND = Array.from({ length: 8 }, (_, i) => {
   };
 });
 
-/* ---------------- Per-representative stats (employee view) ---------------- */
-
-export function repStats(repId: string) {
-  const calls = CALLS.filter((c) => c.repId === repId);
-  const n = Math.max(1, calls.length);
-  const complianceRate = calls.reduce((a, c) => a + callComplianceRate(c), 0) / n;
-  const rank =
-    LEADERBOARD.findIndex((row) => row.rep.id === repId) + 1 || LEADERBOARD.length;
-  const findingsPerCall = calls.reduce((a, c) => a + c.findings.length, 0) / n;
-  const typeCounts = new Map<string, number>();
-  for (const c of calls)
-    for (const f of c.findings) typeCounts.set(f.type, (typeCounts.get(f.type) ?? 0) + 1);
-  const topTypes = [...typeCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
-  const flagged = calls
-    .filter((c) => c.riskTier !== "low")
-    .sort((a, b) => +new Date(b.date) - +new Date(a.date));
-  const clean = calls.filter((c) => c.riskTier === "low");
-  return {
-    calls,
-    complianceRate,
-    rank,
-    totalReps: LEADERBOARD.length,
-    findingsPerCall: Math.round(findingsPerCall * 10) / 10,
-    avgTalkRatio: calls.reduce((a, c) => a + c.metrics.talkRatioRep, 0) / n,
-    avgDiscovery: calls.reduce((a, c) => a + c.metrics.discoveryQuestions, 0) / n,
-    topTypes,
-    flagged,
-    clean,
-  };
-}
-
-export function repWeeklyTrend(repId: string) {
-  return Array.from({ length: 8 }, (_, i) => {
-    const weekStart = NOW - (7 - i) * 7 * DAY;
-    const weekCalls = CALLS.filter((c) => {
-      if (c.repId !== repId) return false;
-      const t = +new Date(c.date);
-      return t >= weekStart - 7 * DAY && t < weekStart;
-    });
-    const date = new Date(weekStart);
-    return {
-      week: `${date.toLocaleString("en-US", { month: "short", timeZone: "UTC" })} ${date.getUTCDate()}`,
-      compliance: weekCalls.length
-        ? Math.round(
-            (weekCalls.reduce((a, c) => a + callComplianceRate(c), 0) / weekCalls.length) * 100,
-          )
-        : null,
-      findings: weekCalls.length
-        ? Math.round(
-            (weekCalls.reduce((a, c) => a + c.findings.length, 0) / weekCalls.length) * 10,
-          ) / 10
-        : null,
-    };
-  });
-}
-
 /* ---------------- Calibration (mock reliability report) ---------------- */
 
 export const CALIBRATION = [

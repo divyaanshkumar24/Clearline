@@ -29,8 +29,6 @@ import { LIVE_REP } from "@/lib/live-call";
 import { useLiveCalls } from "@/lib/use-live-calls";
 import { fmtDuration, fmtPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { RoleGate } from "@/components/role-gate";
-import { RepCoaching } from "@/components/rep-coaching";
 
 function AdminCoaching() {
   // Live-analyzed calls count toward the coaching picture, not just the mock corpus.
@@ -319,6 +317,4 @@ function AdminCoaching() {
   );
 }
 
-export default function CoachingPage() {
-  return <RoleGate admin={<AdminCoaching />} rep={<RepCoaching />} />;
-}
+export default AdminCoaching;

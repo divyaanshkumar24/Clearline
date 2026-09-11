@@ -4,12 +4,9 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowDown,
-  ArrowRight,
   ArrowUp,
   AudioLines,
-  BarChart3,
   BookOpenCheck,
-  FileDown,
   FileSearch,
   GaugeCircle,
   ListChecks,
@@ -19,7 +16,6 @@ import {
   Mic,
   ShieldCheck,
   Sparkles,
-  UserRound,
   UserRoundCog,
   X,
 } from "lucide-react";
@@ -32,7 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { useRole, type Role } from "@/components/role-context";
+import { CURRENT_USER, useRole } from "@/components/role-context";
 import { cn } from "@/lib/utils";
 
 /* Deterministic waveform bars for the hero visual */
@@ -43,50 +39,50 @@ const WAVE = Array.from({ length: 64 }, (_, i) => {
 
 const TRACKS = [
   {
-    icon: ShieldCheck,
-    kicker: "Compliance track",
-    title: "Did a rule get broken?",
-    body: "Every call is scored against a versioned rubric — disclosures, prohibited language, suitability, conduct. Each criterion returns pass, flag, or fail with the exact transcript span, and a confidence that has been calibrated against reality.",
+    icon: AudioLines,
+    kicker: "Speech & sequence processing",
+    title: "Turning raw audio into structured, timestamped text",
+    body: "Silero VAD (voice activity detection) finds speech and drops silence, faster-whisper transcribes each speech region independently to avoid splice artifacts, and pyannote.audio's speaker-diarization model separates and times every speaker turn before a keyword-scored rule labels them agent / client.",
   },
   {
     icon: MessagesSquare,
-    kicker: "Coaching track",
-    title: "Why did the call go that way?",
-    body: "Talk ratio, interruptions, silences, and monologues computed straight from the audio — no model involved. Technique findings are pinned to timestamps and paired with what to do instead next call.",
+    kicker: "Text classification",
+    title: "Scoring tone, emotion, and the moment it turned",
+    body: "Every client turn is scored for sentiment (CardiffNLP's Twitter-RoBERTa) and tagged with one of 27 emotions (GoEmotions), then a PELT change-point algorithm (ruptures) finds the single turn where the sentiment trajectory shifts most sharply — the call's pivot point.",
   },
   {
-    icon: BarChart3,
-    kicker: "Aggregate track",
-    title: "What patterns repeat?",
-    body: "Recurring violations, playbook drift by representative, coaching trends, and a live model-versus-human agreement record — auditing turns into organizational insight.",
+    icon: ShieldCheck,
+    kicker: "Grounded LLM reasoning",
+    title: "Structured output an open LLM can't hallucinate past",
+    body: "An NVIDIA-hosted Nemotron model is forced into a strict JSON schema via tool-calling to score 8 compliance criteria and draft coaching feedback. Every quoted 'evidence' span is independently checked to be a verbatim, timestamped line from the transcript before it's ever shown — ungrounded quotes are dropped, not trusted.",
   },
 ];
 
 const STEPS = [
   {
     icon: Mic,
-    title: "Ingest",
-    body: "Upload a recording or transcript. Metadata is captured automatically.",
+    title: "Preprocess & VAD",
+    body: "Resample to 16kHz mono, then Silero VAD finds speech regions and drops silence.",
   },
   {
     icon: AudioLines,
-    title: "Transcribe & diarize",
-    body: "Speaker-separated, timestamped text — the raw material for every judgment.",
+    title: "Transcribe (ASR)",
+    body: "faster-whisper transcribes each detected speech region on its own, timestamps intact.",
+  },
+  {
+    icon: MessagesSquare,
+    title: "Diarize speakers",
+    body: "pyannote.audio separates speakers by voice embedding; a phrase heuristic maps them to agent/client.",
   },
   {
     icon: FileSearch,
-    title: "Score with evidence",
-    body: "Per-criterion labels with quotes, rationale, confidence, and the rubric version.",
+    title: "Analyze the text",
+    body: "Sentiment (RoBERTa) + emotion (GoEmotions) per turn, then a change-point algorithm locates the pivot.",
   },
   {
     icon: ListChecks,
-    title: "Human review",
-    body: "The AI triages, a reviewer decides. Overrides never overwrite the model's judgment.",
-  },
-  {
-    icon: FileDown,
-    title: "Export",
-    body: "A self-contained audit PDF a compliance officer can act on — and defend.",
+    title: "Score & coach (LLM)",
+    body: "A forced tool-call scores compliance criteria and drafts coaching notes, evidence verified against the transcript.",
   },
 ];
 
@@ -121,58 +117,37 @@ function LoginDialog({
   onOpenChange: (o: boolean) => void;
 }) {
   const router = useRouter();
-  const { setRole } = useRole();
-  const enter = (role: Role) => {
-    setRole(role);
+  const { signIn } = useRole();
+  const enter = () => {
+    signIn();
     onOpenChange(false);
     router.push("/");
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Sign in to Clearline</DialogTitle>
+          <DialogTitle>Enter the workspace</DialogTitle>
           <DialogDescription>
-            Demo workspace — pick a role to continue. No password needed.
+            One workspace, one signed-in user — no accounts or passwords for this
+            project build.
           </DialogDescription>
         </DialogHeader>
-        <div className="mt-2 grid gap-3">
-          <button
-            onClick={() => enter("admin")}
-            className="group flex items-center gap-4 rounded-xl border bg-card p-4 text-left transition-all hover:border-primary/40 hover:bg-accent/50"
-          >
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <UserRoundCog className="size-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-semibold">Admin</p>
-              <p className="text-[12.5px] leading-snug text-muted-foreground">
-                Janet Moss · Chief Compliance Officer. Review queue, overrides,
-                rubrics, analytics, exports.
-              </p>
-            </div>
-            <ArrowRight className="size-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-          </button>
-          <button
-            onClick={() => enter("rep")}
-            className="group flex items-center gap-4 rounded-xl border bg-card p-4 text-left transition-all hover:border-primary/40 hover:bg-accent/50"
-          >
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-chart-2/15 text-status-good-fg">
-              <UserRound className="size-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-semibold">Employee</p>
-              <p className="text-[12.5px] leading-snug text-muted-foreground">
-                Daniel Reyes · Representative. Personal performance, own calls,
-                and coaching feedback.
-              </p>
-            </div>
-            <ArrowRight className="size-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-          </button>
+        <div className="mt-2 flex items-center gap-4 rounded-xl border bg-card p-4">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <UserRoundCog className="size-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-semibold">{CURRENT_USER.name}</p>
+            <p className="text-[12.5px] leading-snug text-muted-foreground">
+              {CURRENT_USER.role}. Full access — dashboard, calls, compliance,
+              coaching, analytics, review, rubrics, and export.
+            </p>
+          </div>
         </div>
-        <p className="mt-1 text-center text-[11px] text-muted-foreground">
-          Roles change what you can see and do — switch anytime from the avatar menu.
-        </p>
+        <Button onClick={enter} className="mt-1 w-full rounded-full">
+          <LogIn className="size-4" /> Enter workspace
+        </Button>
       </DialogContent>
     </Dialog>
   );
@@ -248,9 +223,9 @@ export default function LandingPage() {
   const C = 2 * Math.PI * 9; // progress ring circumference
 
   const mobileLinks = [
-    ["Product", "#product"],
-    ["How it works", "#how"],
-    ["Trust", "#trust"],
+    ["Techniques", "#product"],
+    ["Pipeline", "#how"],
+    ["Evaluation", "#trust"],
   ] as const;
 
   return (
@@ -409,7 +384,7 @@ export default function LandingPage() {
             className="mb-6 gap-1.5 rounded-full border-primary/25 bg-primary/5 px-3 py-1 text-[11.5px] font-medium text-primary"
           >
             <Sparkles className="size-3" />
-            AI Compliance & Coaching Call Auditor
+            Applied NLP project · speech-to-text → diarization → sentiment/emotion → LLM reasoning
           </Badge>
           <h1 className="text-balance text-4xl font-semibold leading-[1.06] tracking-tight sm:text-5xl md:text-6xl">
             Every call audited.
@@ -418,13 +393,15 @@ export default function LandingPage() {
             <em className="font-serif font-medium italic text-primary">defensible.</em>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-balance text-[15px] leading-relaxed text-muted-foreground md:text-[17px]">
-            Clearline listens to every advisory call, scores it against your versioned
-            compliance rubric with cited evidence, and coaches your representatives —
-            while a human stays in charge of every consequential decision.
+            Clearline chains six NLP/ML models into one pipeline: it transcribes a call,
+            separates the speakers, scores the client&rsquo;s sentiment and emotion turn by
+            turn, finds the moment the call turned, and has an LLM score compliance and
+            coach the rep — with every quoted &ldquo;evidence&rdquo; span checked against
+            the real transcript before it&rsquo;s trusted.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Button size="lg" className="rounded-full px-6" onClick={() => setLoginOpen(true)}>
-              <LogIn className="size-4" /> Login to workspace
+              <LogIn className="size-4" /> Enter the workspace
             </Button>
             <Button
               size="lg"
@@ -433,7 +410,7 @@ export default function LandingPage() {
               nativeButton={false}
               render={<a href="#product" />}
             >
-              Explore the product <ArrowDown className="size-4" />
+              See the pipeline <ArrowDown className="size-4" />
             </Button>
           </div>
         </div>
@@ -486,10 +463,10 @@ export default function LandingPage() {
           {/* Stats strip */}
           <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
             {[
-              ["240", "calls audited in 45 days"],
-              ["97%", "model ↔ human agreement"],
-              ["8", "criteria scored per call"],
-              ["100%", "judgments with cited evidence"],
+              ["6", "NLP/ML models chained per call"],
+              ["3", "pipeline stages: ASR → diarize → analyze"],
+              ["8", "compliance criteria scored per call"],
+              ["100%", "evidence quotes verified verbatim"],
             ].map(([v, l]) => (
               <div key={l} className="rounded-xl border bg-card px-4 py-3 text-center">
                 <p className="text-xl font-semibold tabular-nums tracking-tight">{v}</p>
@@ -504,16 +481,16 @@ export default function LandingPage() {
       <section id="product" className="scroll-mt-24 px-4 py-20 md:px-6">
         <div className="mx-auto max-w-6xl">
           <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            01 · What it does
+            01 · The NLP techniques
           </p>
           <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight md:text-4xl">
-            Three tracks. One call.
-            <span className="text-muted-foreground"> Never one blended score.</span>
+            Three NLP problems. One pipeline.
+            <span className="text-muted-foreground"> Chained end to end.</span>
           </h2>
           <p className="mt-4 max-w-2xl text-[14.5px] leading-relaxed text-muted-foreground">
-            A compliance failure and a communication weakness are different problems with
-            different owners. Clearline keeps them separate — so every output stays
-            actionable.
+            Speech processing, text classification, and grounded language generation each
+            solve a different part of turning a raw recording into a defensible judgment —
+            Clearline runs all three, in sequence, on every call.
           </p>
           <div className="mt-10 grid gap-4 md:grid-cols-3">
             {TRACKS.map((t) => (
@@ -541,11 +518,11 @@ export default function LandingPage() {
       <section id="how" className="scroll-mt-24 border-y bg-card/50 px-4 py-20 md:px-6">
         <div className="mx-auto max-w-6xl">
           <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            02 · How it works
+            02 · The pipeline
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
-            Upload to defensible audit
-            <span className="text-muted-foreground"> in five steps.</span>
+            Audio in, structured judgment out
+            <span className="text-muted-foreground"> — five stages.</span>
           </h2>
           <div className="mt-12 grid gap-8 md:grid-cols-5">
             {STEPS.map((s, i) => (
@@ -618,11 +595,12 @@ export default function LandingPage() {
       <section className="px-4 pb-24 md:px-6">
         <div className="mx-auto max-w-6xl overflow-hidden rounded-3xl border bg-foreground px-6 py-16 text-center text-background md:py-20">
           <h2 className="mx-auto max-w-2xl text-balance text-3xl font-semibold tracking-tight md:text-4xl">
-            See your riskiest calls first — starting tomorrow morning.
+            Record or upload a call and watch the pipeline run.
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-[14.5px] leading-relaxed opacity-70">
-            Sign in as an admin to triage the review queue, or as an employee to see
-            personal coaching. Same calls, two very different mornings.
+            One workspace, full access — record a call, watch it move through
+            transcription, diarization, and analysis, then read the compliance and
+            coaching report it produces.
           </p>
           <Button
             size="lg"
@@ -630,7 +608,7 @@ export default function LandingPage() {
             className="mt-8 rounded-full bg-background px-7 text-foreground hover:bg-background/90"
             onClick={() => setLoginOpen(true)}
           >
-            <LogIn className="size-4" /> Login to the demo
+            <LogIn className="size-4" /> Enter the workspace
           </Button>
         </div>
       </section>
@@ -647,14 +625,14 @@ export default function LandingPage() {
                 <span className="text-[15px] font-semibold tracking-tight">Clearline</span>
               </div>
               <p className="mt-3 max-w-[26ch] text-[12.5px] leading-relaxed text-muted-foreground">
-                The evidence-grounded, calibrated, human-supervised audit system for
-                regulated calls.
+                An applied-NLP pipeline: ASR, diarization, sentiment/emotion
+                classification, and grounded LLM reasoning, chained end to end.
               </p>
             </div>
             {[
-              ["Product", ["Three tracks", "Risk prioritization", "Rubric versioning", "Audit exports"]],
-              ["Workspace", ["Admin sign-in", "Employee sign-in", "Review queue", "Coaching digests"]],
-              ["Trust", ["Evaluation harness", "Calibration report", "Adversarial corpus", "Override log"]],
+              ["Techniques", ["Speech & sequence processing", "Text classification", "Grounded LLM reasoning", "Pivot detection"]],
+              ["Workspace", ["Enter workspace", "Record a call", "Review queue", "Coaching digests"]],
+              ["Evaluation", ["Evaluation harness", "Calibration report", "Adversarial corpus", "Evidence grounding"]],
             ].map(([title, items]) => (
               <div key={title as string}>
                 <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -689,8 +667,8 @@ export default function LandingPage() {
             </p>
           </div>
           <div className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t pt-5 text-[11.5px] text-muted-foreground">
-            <span>© 2026 Clearline · UI prototype, mock data only</span>
-            <span>SOC 2 · GDPR ready — every judgment evidenced, versioned, calibrated</span>
+            <span>© 2026 Clearline · NLP course project — mock corpus + a real backend pipeline</span>
+            <span>Every judgment evidenced, versioned, and calibrated</span>
           </div>
         </div>
       </footer>

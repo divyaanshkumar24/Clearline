@@ -39,7 +39,6 @@ import { effectiveLabel } from "@/lib/derived";
 import { fmtPct, fmtTimestamp } from "@/lib/format";
 import type { Severity } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { AccessDenied, RoleGate } from "@/components/role-gate";
 
 const SEVERITY_META: Record<Severity, { label: string; className: string }> = {
   critical: {
@@ -286,6 +285,4 @@ function AdminCompliance() {
   );
 }
 
-export default function CompliancePage() {
-  return <RoleGate admin={<AdminCompliance />} rep={<AccessDenied screen="The compliance view" />} />;
-}
+export default AdminCompliance;

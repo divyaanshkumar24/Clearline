@@ -36,7 +36,6 @@ import { CRITERIA } from "@/lib/mock-data";
 import { HEATMAP, LEADERBOARD } from "@/lib/derived";
 import { fmtPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { AccessDenied, RoleGate } from "@/components/role-gate";
 
 /* Sequential blue ramp (dataviz palette) for the heatmap */
 const RAMP = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95"];
@@ -343,6 +342,4 @@ function AdminAnalytics() {
   );
 }
 
-export default function AnalyticsPage() {
-  return <RoleGate admin={<AdminAnalytics />} rep={<AccessDenied screen="Aggregate analytics" />} />;
-}
+export default AdminAnalytics;

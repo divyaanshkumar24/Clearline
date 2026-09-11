@@ -28,12 +28,16 @@ import {
 } from "@/components/charts";
 import { KpiCard, PageHeader, RepAvatar, RiskBadge } from "@/components/shared";
 import { Reveal, Stagger, StaggerItem } from "@/components/motion";
-import { ACTIVITY, CALLS, getRep } from "@/lib/mock-data";
+import { ACTIVITY, CALLS, getRep, REVIEWERS } from "@/lib/mock-data";
 import { KPIS, LEADERBOARD, RISK_DISTRIBUTION } from "@/lib/derived";
 import { fmtPct, fmtRelative, TIER_META } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { RoleGate } from "@/components/role-gate";
-import { RepDashboard } from "@/components/rep-dashboard";
+
+// The single signed-in user for this workspace — same identity role-context.tsx
+// uses client-side. Read directly from mock-data here since this is a Server
+// Component and role-context.tsx is a "use client" module (its non-component
+// exports don't cross that boundary cleanly).
+const CURRENT_USER = REVIEWERS[0];
 
 const ACTIVITY_ICON: Record<string, React.ReactNode> = {
   call_audited: <PhoneCall className="size-3.5" />,
@@ -44,13 +48,14 @@ const ACTIVITY_ICON: Record<string, React.ReactNode> = {
   reaudit: <RefreshCcw className="size-3.5" />,
 };
 
-function AdminDashboard() {
+export default function DashboardPage() {
   const topRisk = CALLS.filter((c) => c.riskTier === "critical").slice(0, 4);
+  const firstName = CURRENT_USER.name.split(" ")[0];
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-6 md:px-6 lg:px-8">
       <PageHeader
-        title="Good afternoon, Janet"
+        title={`Good afternoon, ${firstName}`}
         description="Every call audited, ranked by risk. Here's where reviewer attention should go today — Tuesday, July 15."
       >
         <ButtonLink variant="outline" size="sm" href="/export">
@@ -306,8 +311,4 @@ function AdminDashboard() {
       </Reveal>
     </div>
   );
-}
-
-export default function DashboardPage() {
-  return <RoleGate admin={<AdminDashboard />} rep={<RepDashboard />} />;
 }
