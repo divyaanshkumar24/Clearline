@@ -55,7 +55,6 @@ import { callComplianceRate, effectiveLabel } from "@/lib/derived";
 import { fmtDateTime, fmtDuration, fmtPct } from "@/lib/format";
 import type { Call, RiskTier } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { useRole, REP_PERSONA } from "@/components/role-context";
 
 const PAGE_SIZE = 12;
 const TIER_ORDER: Record<RiskTier, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -63,8 +62,6 @@ const TIER_ORDER: Record<RiskTier, number> = { critical: 0, high: 1, medium: 2, 
 type SortKey = "risk" | "date" | "duration" | "compliance";
 
 export default function CallsPage() {
-  const { role } = useRole();
-  const isRep = role === "rep";
   const [query, setQuery] = React.useState("");
   const [tier, setTier] = React.useState<string>("all");
   const [status, setStatus] = React.useState<string>("all");
@@ -90,10 +87,9 @@ export default function CallsPage() {
 
   const filtered = React.useMemo(() => {
     let rows = allCalls.filter((c) => {
-      if (isRep && c.repId !== REP_PERSONA.id) return false;
       if (tier !== "all" && c.riskTier !== tier) return false;
       if (status !== "all" && c.status !== status) return false;
-      if (!isRep && rep !== "all" && c.repId !== rep) return false;
+      if (rep !== "all" && c.repId !== rep) return false;
       if (query) {
         const q = query.toLowerCase();
         const r = resolveRep(c.repId);
@@ -123,7 +119,7 @@ export default function CallsPage() {
       }
     });
     return rows;
-  }, [allCalls, query, tier, status, rep, sort, isRep]);
+  }, [allCalls, query, tier, status, rep, sort]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
@@ -141,12 +137,8 @@ export default function CallsPage() {
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-6 md:px-6 lg:px-8">
       <PageHeader
-        title={isRep ? "My calls" : "Calls"}
-        description={
-          isRep
-            ? "Every one of your audited calls. Open any call to see exactly which moments the audit flagged and the coaching attached to them."
-            : "All audited calls, ranked by risk tier so the riskiest and least certain conversations surface first."
-        }
+        title="Calls"
+        description="All audited calls, ranked by risk tier so the riskiest and least certain conversations surface first."
       >
         <ButtonLink href="/new-call" variant="outline" size="sm">
           <Upload className="size-4" /> Upload recording
@@ -201,7 +193,6 @@ export default function CallsPage() {
               <SelectItem value="escalated">Escalated</SelectItem>
             </SelectContent>
           </Select>
-          {!isRep ? (
           <Select
             items={Object.fromEntries([["all", "All representatives"], ...REPRESENTATIVES.map((r) => [r.id, r.name])])}
             value={rep}
@@ -221,7 +212,6 @@ export default function CallsPage() {
                 ))}
             </SelectContent>
           </Select>
-          ) : null}
           <Select
             items={{ risk: "Sort: Risk tier", date: "Sort: Most recent", duration: "Sort: Longest", compliance: "Sort: Lowest compliance" }}
             value={sort}

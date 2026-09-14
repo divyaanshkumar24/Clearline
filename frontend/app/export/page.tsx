@@ -33,7 +33,6 @@ import { effectiveLabel } from "@/lib/derived";
 import { fmtDateTime, fmtDuration, fmtPct, fmtTimestamp } from "@/lib/format";
 import type { ScoreLabel } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { AccessDenied, RoleGate } from "@/components/role-gate";
 
 const LABEL_PRINT: Record<ScoreLabel, string> = {
   pass: "PASS",
@@ -409,6 +408,4 @@ function AdminExport() {
   );
 }
 
-export default function ExportPage() {
-  return <RoleGate admin={<AdminExport />} rep={<AccessDenied screen="Export preview" />} />;
-}
+export default AdminExport;

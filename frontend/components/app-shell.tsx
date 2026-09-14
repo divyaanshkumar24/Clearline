@@ -20,10 +20,7 @@ import {
   Search,
   ShieldCheck,
   Sun,
-  UserRound,
-  UserRoundCog,
   Bell,
-  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ButtonLink } from "@/components/button-link";
@@ -50,13 +47,7 @@ import { Badge } from "@/components/ui/badge";
 import { CALLS, ORGANIZATION } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
-import {
-  ADMIN_PERSONA,
-  REP_PERSONA,
-  RoleProvider,
-  useRole,
-  type Role,
-} from "@/components/role-context";
+import { CURRENT_USER, RoleProvider, useRole } from "@/components/role-context";
 
 type NavItem = {
   href: string;
@@ -65,7 +56,7 @@ type NavItem = {
   badge?: boolean;
 };
 
-const ADMIN_NAV: Array<{ section: string; items: NavItem[] }> = [
+const NAV: Array<{ section: string; items: NavItem[] }> = [
   {
     section: "Operate",
     items: [
@@ -91,30 +82,14 @@ const ADMIN_NAV: Array<{ section: string; items: NavItem[] }> = [
   },
 ];
 
-const REP_NAV: Array<{ section: string; items: NavItem[] }> = [
-  {
-    section: "My workspace",
-    items: [
-      { href: "/", label: "My performance", icon: LayoutDashboard },
-      { href: "/calls", label: "My calls", icon: Phone },
-      { href: "/coaching", label: "My coaching", icon: MessagesSquare },
-    ],
-  },
-];
-
-function navForRole(role: Role) {
-  return role === "admin" ? ADMIN_NAV : REP_NAV;
-}
-
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { role } = useRole();
   const pendingCount = CALLS.filter(
     (c) => c.status === "pending" || c.status === "in_review",
   ).length;
   return (
     <nav className="flex flex-col gap-5 px-3">
-      {navForRole(role).map((group) => (
+      {NAV.map((group) => (
         <div key={group.section}>
           <p className="px-3 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
             {group.section}
@@ -163,7 +138,6 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
-  const { role } = useRole();
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2.5 px-6 py-5">
@@ -192,7 +166,7 @@ function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
           <div className="min-w-0 leading-tight">
             <p className="truncate text-[12.5px] font-medium">{ORGANIZATION.name}</p>
             <p className="text-[11px] text-muted-foreground">
-              {role === "admin" ? `${ORGANIZATION.plan} · Rubric v2.4` : `${REP_PERSONA.team} team`}
+              {ORGANIZATION.plan} · Rubric v2.4
             </p>
           </div>
         </div>
@@ -209,31 +183,25 @@ function CommandPalette({
   setOpen: (o: boolean) => void;
 }) {
   const router = useRouter();
-  const { role } = useRole();
   const go = (href: string) => {
     setOpen(false);
     router.push(href);
   };
-  const riskCalls =
-    role === "admin"
-      ? CALLS.filter((c) => c.riskTier === "critical").slice(0, 5)
-      : CALLS.filter((c) => c.repId === REP_PERSONA.id && c.riskTier !== "low").slice(0, 5);
+  const riskCalls = CALLS.filter((c) => c.riskTier === "critical").slice(0, 5);
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
       <CommandInput placeholder="Search calls, screens, representatives…" />
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
         <CommandGroup heading="Screens">
-          {navForRole(role)
-            .flatMap((g) => g.items)
-            .map((item) => (
-              <CommandItem key={item.href} onSelect={() => go(item.href)}>
-                <item.icon className="size-4" />
-                {item.label}
-              </CommandItem>
-            ))}
+          {NAV.flatMap((g) => g.items).map((item) => (
+            <CommandItem key={item.href} onSelect={() => go(item.href)}>
+              <item.icon className="size-4" />
+              {item.label}
+            </CommandItem>
+          ))}
         </CommandGroup>
-        <CommandGroup heading={role === "admin" ? "High-risk calls" : "My flagged calls"}>
+        <CommandGroup heading="High-risk calls">
           {riskCalls.map((c) => (
             <CommandItem key={c.id} onSelect={() => go(`/calls/${c.id}`)}>
               <GaugeCircle className="size-4 text-status-critical" />
@@ -249,7 +217,7 @@ function CommandPalette({
 
 function ShellInner({ children }: { children: React.ReactNode }) {
   const { resolvedTheme, setTheme } = useTheme();
-  const { role, setRole, signedIn, signOut, ready } = useRole();
+  const { signedIn, signOut, ready } = useRole();
   const [mounted, setMounted] = React.useState(false);
   const [cmdOpen, setCmdOpen] = React.useState(false);
   const [sheetOpen, setSheetOpen] = React.useState(false);
@@ -277,15 +245,10 @@ function ShellInner({ children }: { children: React.ReactNode }) {
     }
   }, [ready, signedIn, bare, router]);
 
-  const persona =
-    role === "admin"
-      ? { name: ADMIN_PERSONA.name, sub: ADMIN_PERSONA.role, initials: ADMIN_PERSONA.initials }
-      : { name: REP_PERSONA.name, sub: `Representative · ${REP_PERSONA.team}`, initials: REP_PERSONA.initials };
-
-  const switchRole = (r: Role) => {
-    if (r === role) return;
-    setRole(r);
-    router.push("/");
+  const persona = {
+    name: CURRENT_USER.name,
+    sub: CURRENT_USER.role,
+    initials: CURRENT_USER.initials,
   };
 
   if (!ready) {
@@ -347,26 +310,16 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           </button>
 
           <div className="ml-auto flex items-center gap-1.5">
-            {role === "admin" ? (
-              <Badge
-                variant="outline"
-                className="hidden gap-1.5 border-status-good/30 bg-status-good/5 text-[11px] font-medium text-status-good-fg sm:inline-flex"
-              >
-                <span className="relative flex size-1.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-good opacity-60" />
-                  <span className="relative inline-flex size-1.5 rounded-full bg-status-good" />
-                </span>
-                Pipeline healthy
-              </Badge>
-            ) : (
-              <Badge
-                variant="outline"
-                className="hidden gap-1.5 border-primary/25 bg-primary/5 text-[11px] font-medium text-primary sm:inline-flex"
-              >
-                <UserRound className="size-3" />
-                Representative view
-              </Badge>
-            )}
+            <Badge
+              variant="outline"
+              className="hidden gap-1.5 border-status-good/30 bg-status-good/5 text-[11px] font-medium text-status-good-fg sm:inline-flex"
+            >
+              <span className="relative flex size-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-good opacity-60" />
+                <span className="relative inline-flex size-1.5 rounded-full bg-status-good" />
+              </span>
+              Pipeline healthy
+            </Badge>
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="size-4.5" />
               <span className="absolute right-2 top-2 size-1.5 rounded-full bg-status-critical" />
@@ -386,14 +339,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
             <DropdownMenu>
               <DropdownMenuTrigger className="ml-1 rounded-full outline-offset-2">
                 <Avatar className="size-7.5 border">
-                  <AvatarFallback
-                    className={cn(
-                      "text-[11px] font-semibold",
-                      role === "admin"
-                        ? "bg-primary/10 text-primary"
-                        : "bg-chart-2/15 text-status-good-fg",
-                    )}
-                  >
+                  <AvatarFallback className="bg-primary/10 text-[11px] font-semibold text-primary">
                     {persona.initials}
                   </AvatarFallback>
                 </Avatar>
@@ -404,30 +350,6 @@ function ShellInner({ children }: { children: React.ReactNode }) {
                     <p className="text-[13px] font-medium">{persona.name}</p>
                     <p className="text-xs font-normal text-muted-foreground">{persona.sub}</p>
                   </DropdownMenuLabel>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                <DropdownMenuLabel className="text-[10.5px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Switch persona (demo)
-                </DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => switchRole("admin")}>
-                  <UserRoundCog className="size-4" />
-                  <div className="flex-1 leading-tight">
-                    <p className="text-[13px]">{ADMIN_PERSONA.name}</p>
-                    <p className="text-[11px] text-muted-foreground">Admin · {ADMIN_PERSONA.role}</p>
-                  </div>
-                  {role === "admin" ? <Check className="size-3.5 text-primary" /> : null}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => switchRole("rep")}>
-                  <UserRound className="size-4" />
-                  <div className="flex-1 leading-tight">
-                    <p className="text-[13px]">{REP_PERSONA.name}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Employee · Representative
-                    </p>
-                  </div>
-                  {role === "rep" ? <Check className="size-3.5 text-primary" /> : null}
-                </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem>Notification settings</DropdownMenuItem>

@@ -31,7 +31,6 @@ import { Reveal } from "@/components/motion";
 import { CRITERIA, RUBRIC_VERSIONS } from "@/lib/mock-data";
 import type { Severity } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { AccessDenied, RoleGate } from "@/components/role-gate";
 
 const SEV_BADGE: Record<Severity, string> = {
   critical: "border-status-critical/30 bg-status-critical/10 text-status-critical-fg",
@@ -375,6 +374,4 @@ function AdminRubrics() {
   );
 }
 
-export default function RubricsPage() {
-  return <RoleGate admin={<AdminRubrics />} rep={<AccessDenied screen="Rubric management" />} />;
-}
+export default AdminRubrics;

@@ -1,13 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { REPRESENTATIVES, REVIEWERS } from "@/lib/mock-data";
+import { REVIEWERS } from "@/lib/mock-data";
 
-export type Role = "admin" | "rep";
-
-/** Fixed demo personas — no real auth in this prototype */
-export const ADMIN_PERSONA = REVIEWERS[0]; // Janet Moss, CCO
-export const REP_PERSONA = REPRESENTATIVES.find((r) => r.id === "rep-02")!; // Daniel Reyes
+/**
+ * Single-user workspace — no persona split. Whoever signs in gets full
+ * access: every screen, plus recording/uploading and reviewing their own
+ * calls. The identity below is cosmetic (name/title shown in the topbar),
+ * reusing the existing reviewer record rather than inventing a new one.
+ */
+export const CURRENT_USER = REVIEWERS[0]; // Janet Moss, Chief Compliance Officer
 
 /**
  * Session-scoped auth: stored in sessionStorage so every fresh browser
@@ -17,43 +19,37 @@ export const REP_PERSONA = REPRESENTATIVES.find((r) => r.id === "rep-02")!; // D
 const AUTH_KEY = "clearline-auth";
 
 interface RoleContextValue {
-  role: Role;
-  /** true once a persona was chosen via the landing page (or persona switcher) */
+  /** true once the user has signed in via the landing page */
   signedIn: boolean;
-  /** choose/switch persona — also marks the session as signed in */
-  setRole: (r: Role) => void;
+  signIn: () => void;
   signOut: () => void;
   /** true once the client has hydrated the persisted session */
   ready: boolean;
 }
 
 const RoleContext = React.createContext<RoleContextValue>({
-  role: "admin",
   signedIn: false,
-  setRole: () => {},
+  signIn: () => {},
   signOut: () => {},
   ready: false,
 });
 
 export function RoleProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRoleState] = React.useState<Role>("admin");
   const [signedIn, setSignedIn] = React.useState(false);
   const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
     const stored = window.sessionStorage.getItem(AUTH_KEY);
-    if (stored === "rep" || stored === "admin") {
+    if (stored === "1") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setRoleState(stored);
       setSignedIn(true);
     }
     setReady(true);
   }, []);
 
-  const setRole = React.useCallback((r: Role) => {
-    setRoleState(r);
+  const signIn = React.useCallback(() => {
     setSignedIn(true);
-    window.sessionStorage.setItem(AUTH_KEY, r);
+    window.sessionStorage.setItem(AUTH_KEY, "1");
   }, []);
 
   const signOut = React.useCallback(() => {
@@ -62,7 +58,7 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <RoleContext.Provider value={{ role, signedIn, setRole, signOut, ready }}>
+    <RoleContext.Provider value={{ signedIn, signIn, signOut, ready }}>
       {children}
     </RoleContext.Provider>
   );

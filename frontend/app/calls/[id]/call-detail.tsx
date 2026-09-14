@@ -66,8 +66,6 @@ import { adaptLiveCall, LIVE_REP, type BackendCallResult } from "@/lib/live-call
 import { fmtDateTime, fmtDuration, fmtPct, fmtTimestamp } from "@/lib/format";
 import type { Call, ScoreLabel, TranscriptSegment } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { useRole, REP_PERSONA } from "@/components/role-context";
-import { AccessDenied } from "@/components/role-gate";
 
 function seededBars(id: string, n: number) {
   let h = 2166136261;
@@ -88,8 +86,6 @@ function seededBars(id: string, n: number) {
 }
 
 export function CallDetail({ callId }: { callId: string }) {
-  const { role } = useRole();
-  const isRep = role === "rep";
   const router = useRouter();
 
   // Calls submitted through /new-call aren't in the mock dataset — for those,
@@ -242,16 +238,6 @@ export function CallDetail({ callId }: { callId: string }) {
 
   const passCount = call.scores.filter((s) => effective(s) === "pass").length;
 
-  if (isRep && call.repId !== REP_PERSONA.id && call.repId !== LIVE_REP.id) {
-    return <AccessDenied screen="This call belongs to another representative and" />;
-  }
-
-  const dispute = (criterionId: string) =>
-    toast.success(`Dispute submitted for ${getCriterion(criterionId).code}`, {
-      description:
-        "Routed to the compliance review queue. A reviewer will re-examine the evidence span and respond.",
-    });
-
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-5 md:px-6">
       {/* Header */}
@@ -279,30 +265,19 @@ export function CallDetail({ callId }: { callId: string }) {
             </Badge>
           ) : null}
           <div className="w-full sm:w-auto sm:ml-auto flex flex-wrap items-center gap-2 mt-2 sm:mt-0">
-            {isRep ? (
-              <Badge
-                variant="outline"
-                className="gap-1.5 border-primary/25 bg-primary/5 font-medium text-primary"
-              >
-                Read-only · dispute findings you disagree with
-              </Badge>
-            ) : (
-              <>
-                <Button variant="outline" size="sm" onClick={() => toast("Re-audit queued", { description: "This call will be re-scored under rubric v2.5 draft for comparison." })}>
-                  <RotateCcw className="size-3.5" /> Re-audit
-                </Button>
-                <ButtonLink variant="outline" size="sm" href="/export">
-                  <FileDown className="size-3.5" /> Export PDF
-                </ButtonLink>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => toast.warning("Escalated to legal review", { description: "Janet Moss notified. SLA clock started." })}
-                >
-                  <Flame className="size-3.5" /> Escalate
-                </Button>
-              </>
-            )}
+            <Button variant="outline" size="sm" onClick={() => toast("Re-audit queued", { description: "This call will be re-scored under rubric v2.5 draft for comparison." })}>
+              <RotateCcw className="size-3.5" /> Re-audit
+            </Button>
+            <ButtonLink variant="outline" size="sm" href="/export">
+              <FileDown className="size-3.5" /> Export PDF
+            </ButtonLink>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => toast.warning("Escalated to legal review", { description: "Janet Moss notified. SLA clock started." })}
+            >
+              <Flame className="size-3.5" /> Escalate
+            </Button>
           </div>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 pl-11 text-[12.5px] text-muted-foreground">
@@ -554,11 +529,9 @@ export function CallDetail({ callId }: { callId: string }) {
               <TabsTrigger value="coaching" className="flex-1 gap-1.5">
                 <MessageSquareText className="size-3.5" /> Coaching
               </TabsTrigger>
-              {!isRep ? (
-                <TabsTrigger value="notes" className="flex-1 gap-1.5">
-                  <History className="size-3.5" /> Notes
-                </TabsTrigger>
-              ) : null}
+              <TabsTrigger value="notes" className="flex-1 gap-1.5">
+                <History className="size-3.5" /> Notes
+              </TabsTrigger>
             </TabsList>
 
             {/* Compliance tab */}
@@ -626,18 +599,6 @@ export function CallDetail({ callId }: { callId: string }) {
                               </button>
                             </div>
                           </div>
-                          {isRep ? (
-                            label !== "pass" ? (
-                              <Button
-                                variant="outline"
-                                size="xs"
-                                className="shrink-0"
-                                onClick={() => dispute(s.criterionId)}
-                              >
-                                <Flag className="size-3" /> Dispute
-                              </Button>
-                            ) : null
-                          ) : (
                           <DropdownMenu>
                             <DropdownMenuTrigger
                               render={
@@ -682,7 +643,6 @@ export function CallDetail({ callId }: { callId: string }) {
                               ) : null}
                             </DropdownMenuContent>
                           </DropdownMenu>
-                          )}
                         </div>
 
                         <CollapsibleTrigger className="mt-2 flex items-center gap-1 text-[11.5px] font-medium text-muted-foreground hover:text-foreground">

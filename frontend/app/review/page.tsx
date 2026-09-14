@@ -42,7 +42,6 @@ import { CALLS, getCriterion, getRep, getReviewer } from "@/lib/mock-data";
 import { fmtDateTime, fmtRelative, fmtTimestamp } from "@/lib/format";
 import type { RiskTier, ScoreLabel } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { AccessDenied, RoleGate } from "@/components/role-gate";
 
 const TIER_ORDER: Record<RiskTier, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
@@ -411,6 +410,4 @@ function AdminReview() {
   );
 }
 
-export default function ReviewPage() {
-  return <RoleGate admin={<AdminReview />} rep={<AccessDenied screen="The review workspace" />} />;
-}
+export default AdminReview;
