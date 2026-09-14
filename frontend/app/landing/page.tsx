@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { motion, type Variants } from "framer-motion";
 import {
   ArrowDown,
   ArrowUp,
@@ -29,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { CURRENT_USER, useRole } from "@/components/role-context";
+import { AnimatedNumber } from "@/components/animated-number";
 import { cn } from "@/lib/utils";
 
 /* Deterministic waveform bars for the hero visual */
@@ -108,6 +110,16 @@ const TRUST = [
     stat: "97% model ↔ human agreement",
   },
 ];
+
+/* Scroll-triggered stagger — cards fade/slide in as each section enters view. */
+const fadeUpContainer: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08 } },
+};
+const fadeUpItem: Variants = {
+  hidden: { opacity: 0, y: 18 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
+};
 
 function LoginDialog({
   open,
@@ -378,28 +390,41 @@ export default function LandingPage() {
         >
           <div className="absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,--alpha(var(--color-primary)/8%),transparent_70%)]" />
         </div>
-        <div className="relative mx-auto max-w-4xl text-center">
-          <Badge
-            variant="outline"
-            className="mb-6 gap-1.5 rounded-full border-primary/25 bg-primary/5 px-3 py-1 text-[11.5px] font-medium text-primary"
+        <motion.div
+          className="relative mx-auto max-w-4xl text-center"
+          variants={fadeUpContainer}
+          initial="hidden"
+          animate="show"
+        >
+          <motion.div variants={fadeUpItem}>
+            <Badge
+              variant="outline"
+              className="mb-6 gap-1.5 rounded-full border-primary/25 bg-primary/5 px-3 py-1 text-[11.5px] font-medium text-primary"
+            >
+              <Sparkles className="size-3" />
+              Applied NLP project · speech-to-text → diarization → sentiment/emotion → LLM reasoning
+            </Badge>
+          </motion.div>
+          <motion.h1
+            variants={fadeUpItem}
+            className="text-balance text-4xl font-semibold leading-[1.06] tracking-tight sm:text-5xl md:text-6xl"
           >
-            <Sparkles className="size-3" />
-            Applied NLP project · speech-to-text → diarization → sentiment/emotion → LLM reasoning
-          </Badge>
-          <h1 className="text-balance text-4xl font-semibold leading-[1.06] tracking-tight sm:text-5xl md:text-6xl">
             Every call audited.
             <br />
             Every judgment{" "}
             <em className="font-serif font-medium italic text-primary">defensible.</em>
-          </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-balance text-[15px] leading-relaxed text-muted-foreground md:text-[17px]">
+          </motion.h1>
+          <motion.p
+            variants={fadeUpItem}
+            className="mx-auto mt-6 max-w-2xl text-balance text-[15px] leading-relaxed text-muted-foreground md:text-[17px]"
+          >
             Clearline chains six NLP/ML models into one pipeline: it transcribes a call,
             separates the speakers, scores the client&rsquo;s sentiment and emotion turn by
             turn, finds the moment the call turned, and has an LLM score compliance and
             coach the rep — with every quoted &ldquo;evidence&rdquo; span checked against
             the real transcript before it&rsquo;s trusted.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          </motion.p>
+          <motion.div variants={fadeUpItem} className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Button size="lg" className="rounded-full px-6" onClick={() => setLoginOpen(true)}>
               <LogIn className="size-4" /> Enter the workspace
             </Button>
@@ -412,11 +437,16 @@ export default function LandingPage() {
             >
               See the pipeline <ArrowDown className="size-4" />
             </Button>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
         {/* Hero visual — an audited moment */}
-        <div className="relative mx-auto mt-16 max-w-3xl">
+        <motion.div
+          className="relative mx-auto mt-16 max-w-3xl"
+          initial={{ opacity: 0, y: 24, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.6, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        >
           <div className="rounded-2xl border bg-card p-5 shadow-lg md:p-6">
             <div className="flex items-center gap-3">
               <span className="font-mono text-[11.5px] font-medium text-muted-foreground">
@@ -461,20 +491,27 @@ export default function LandingPage() {
             </div>
           </div>
           {/* Stats strip */}
-          <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <motion.div
+            className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4"
+            variants={fadeUpContainer}
+            initial="hidden"
+            animate="show"
+          >
             {[
-              ["6", "NLP/ML models chained per call"],
-              ["3", "pipeline stages: ASR → diarize → analyze"],
-              ["8", "compliance criteria scored per call"],
-              ["100%", "evidence quotes verified verbatim"],
-            ].map(([v, l]) => (
-              <div key={l} className="rounded-xl border bg-card px-4 py-3 text-center">
-                <p className="text-xl font-semibold tabular-nums tracking-tight">{v}</p>
+              { value: 6, suffix: "", label: "NLP/ML models chained per call" },
+              { value: 3, suffix: "", label: "pipeline stages: ASR → diarize → analyze" },
+              { value: 8, suffix: "", label: "compliance criteria scored per call" },
+              { value: 100, suffix: "%", label: "evidence quotes verified verbatim" },
+            ].map(({ value, suffix, label: l }) => (
+              <motion.div key={l} variants={fadeUpItem} className="rounded-xl border bg-card px-4 py-3 text-center">
+                <p className="text-xl font-semibold tabular-nums tracking-tight">
+                  <AnimatedNumber value={value} duration={1.2} format={(n) => `${Math.round(n)}${suffix}`} />
+                </p>
                 <p className="mt-0.5 text-[11.5px] text-muted-foreground">{l}</p>
-              </div>
+              </motion.div>
             ))}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </section>
 
       {/* ---------------- Product: three tracks ---------------- */}
@@ -492,11 +529,18 @@ export default function LandingPage() {
             solve a different part of turning a raw recording into a defensible judgment —
             Clearline runs all three, in sequence, on every call.
           </p>
-          <div className="mt-10 grid gap-4 md:grid-cols-3">
+          <motion.div
+            className="mt-10 grid gap-4 md:grid-cols-3"
+            variants={fadeUpContainer}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.3 }}
+          >
             {TRACKS.map((t) => (
-              <div
+              <motion.div
                 key={t.kicker}
-                className="group rounded-2xl border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
+                variants={fadeUpItem}
+                className="group rounded-2xl border bg-card p-6 transition-all hover:-translate-y-1 hover:border-primary/30 hover:shadow-md"
               >
                 <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <t.icon className="size-5" />
@@ -508,9 +552,9 @@ export default function LandingPage() {
                 <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">
                   {t.body}
                 </p>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 
@@ -524,9 +568,15 @@ export default function LandingPage() {
             Audio in, structured judgment out
             <span className="text-muted-foreground"> — five stages.</span>
           </h2>
-          <div className="mt-12 grid gap-8 md:grid-cols-5">
+          <motion.div
+            className="mt-12 grid gap-8 md:grid-cols-5"
+            variants={fadeUpContainer}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.3 }}
+          >
             {STEPS.map((s, i) => (
-              <div key={s.title} className="relative">
+              <motion.div key={s.title} variants={fadeUpItem} className="relative">
                 {i < STEPS.length - 1 ? (
                   <span className="absolute left-5 top-12 hidden h-px w-[calc(100%-1rem)] translate-x-6 bg-border md:block" />
                 ) : null}
@@ -540,9 +590,9 @@ export default function LandingPage() {
                 <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted-foreground">
                   {s.body}
                 </p>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
           <div className="mt-12 flex flex-wrap items-center gap-3 rounded-2xl border bg-background p-5">
             <BookOpenCheck className="size-5 shrink-0 text-primary" />
             <p className="text-[13.5px] leading-relaxed text-muted-foreground">
@@ -570,9 +620,19 @@ export default function LandingPage() {
             An audit tool that can&rsquo;t defend its own judgments is a demonstration.
             Clearline measures its reliability and shows the receipts.
           </p>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2">
+          <motion.div
+            className="mt-10 grid gap-4 sm:grid-cols-2"
+            variants={fadeUpContainer}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.3 }}
+          >
             {TRUST.map((t) => (
-              <div key={t.title} className="rounded-2xl border bg-card p-6">
+              <motion.div
+                key={t.title}
+                variants={fadeUpItem}
+                className="rounded-2xl border bg-card p-6 transition-all hover:-translate-y-1 hover:border-primary/30 hover:shadow-md"
+              >
                 <div className="flex items-start justify-between gap-4">
                   <h3 className="text-[16px] font-semibold tracking-tight">{t.title}</h3>
                   <Badge
@@ -585,9 +645,9 @@ export default function LandingPage() {
                 <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">
                   {t.body}
                 </p>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 

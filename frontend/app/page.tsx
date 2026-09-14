@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   ArrowRight,
@@ -5,6 +7,7 @@ import {
   Flame,
   GitPullRequestArrow,
   ListChecks,
+  Mic,
   PhoneCall,
   RefreshCcw,
   ShieldCheck,
@@ -28,15 +31,16 @@ import {
 } from "@/components/charts";
 import { KpiCard, PageHeader, RepAvatar, RiskBadge } from "@/components/shared";
 import { Reveal, Stagger, StaggerItem } from "@/components/motion";
+import { AnimatedNumber } from "@/components/animated-number";
 import { ACTIVITY, CALLS, getRep, REVIEWERS } from "@/lib/mock-data";
 import { KPIS, LEADERBOARD, RISK_DISTRIBUTION } from "@/lib/derived";
 import { fmtPct, fmtRelative, TIER_META } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // The single signed-in user for this workspace — same identity role-context.tsx
-// uses client-side. Read directly from mock-data here since this is a Server
-// Component and role-context.tsx is a "use client" module (its non-component
-// exports don't cross that boundary cleanly).
+// uses client-side. Read directly from mock-data here rather than importing
+// CURRENT_USER from role-context.tsx to avoid depending on that module's
+// client-only export shape.
 const CURRENT_USER = REVIEWERS[0];
 
 const ACTIVITY_ICON: Record<string, React.ReactNode> = {
@@ -64,6 +68,9 @@ export default function DashboardPage() {
         <ButtonLink size="sm" href="/review">
           <ListChecks className="size-4" /> Open review queue
         </ButtonLink>
+        <ButtonLink size="lg" href="/new-call">
+          <Mic className="size-4.5" /> New call
+        </ButtonLink>
       </PageHeader>
 
       {/* KPI row */}
@@ -71,7 +78,7 @@ export default function DashboardPage() {
         <StaggerItem>
           <KpiCard
             label="Calls audited today"
-            value={String(KPIS.auditedToday)}
+            value={<AnimatedNumber value={KPIS.auditedToday} />}
             delta={KPIS.auditedDeltaPct}
             deltaLabel="vs last week"
             icon={<PhoneCall className="size-4" />}
@@ -80,7 +87,7 @@ export default function DashboardPage() {
         <StaggerItem>
           <KpiCard
             label="Compliance rate (7d)"
-            value={fmtPct(KPIS.complianceRate)}
+            value={<AnimatedNumber value={KPIS.complianceRate} format={(n) => fmtPct(n)} />}
             delta={Math.round(KPIS.complianceDelta * 100)}
             deltaLabel="pts"
             icon={<ShieldCheck className="size-4" />}
@@ -89,7 +96,7 @@ export default function DashboardPage() {
         <StaggerItem>
           <KpiCard
             label="High-risk open"
-            value={String(KPIS.highRiskOpen)}
+            value={<AnimatedNumber value={KPIS.highRiskOpen} />}
             deltaLabel="awaiting human decision"
             icon={<Flame className="size-4" />}
           />
@@ -97,7 +104,7 @@ export default function DashboardPage() {
         <StaggerItem>
           <KpiCard
             label="Pending reviews"
-            value={String(KPIS.pendingReviews)}
+            value={<AnimatedNumber value={KPIS.pendingReviews} />}
             deltaLabel="ordered by risk tier"
             icon={<ListChecks className="size-4" />}
           />
@@ -105,7 +112,7 @@ export default function DashboardPage() {
         <StaggerItem>
           <KpiCard
             label="Model ↔ human agreement"
-            value={fmtPct(KPIS.agreementRate, 1)}
+            value={<AnimatedNumber value={KPIS.agreementRate} format={(n) => fmtPct(n, 1)} />}
             deltaLabel="on reviewed judgments"
             icon={<UserRoundCheck className="size-4" />}
           />
@@ -113,7 +120,7 @@ export default function DashboardPage() {
         <StaggerItem>
           <KpiCard
             label="Total calls (45d)"
-            value={String(KPIS.totalCalls)}
+            value={<AnimatedNumber value={KPIS.totalCalls} />}
             deltaLabel="rubric v2.4 · calibrated"
             icon={<RefreshCcw className="size-4" />}
           />

@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
+import { motion } from "framer-motion";
 import {
   AudioLines,
   BarChart3,
@@ -48,6 +49,7 @@ import { CALLS, ORGANIZATION } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { CURRENT_USER, RoleProvider, useRole } from "@/components/role-context";
+import { PageTransition } from "@/components/page-transition";
 
 type NavItem = {
   href: string;
@@ -82,7 +84,7 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
   },
 ];
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLinks({ onNavigate, scope }: { onNavigate?: () => void; scope: string }) {
   const pathname = usePathname();
   const pendingCount = CALLS.filter(
     (c) => c.status === "pending" || c.status === "in_review",
@@ -106,23 +108,30 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
                   href={item.href}
                   onClick={onNavigate}
                   className={cn(
-                    "group flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors",
+                    "group relative flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors",
                     active
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      ? "text-sidebar-accent-foreground"
                       : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
                   )}
                 >
+                  {active ? (
+                    <motion.span
+                      layoutId={`nav-active-pill-${scope}`}
+                      className="absolute inset-0 rounded-md bg-sidebar-accent"
+                      transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                    />
+                  ) : null}
                   <item.icon
                     className={cn(
-                      "size-4 shrink-0",
+                      "relative z-10 size-4 shrink-0",
                       active ? "text-primary" : "text-muted-foreground/70 group-hover:text-foreground",
                     )}
                   />
-                  <span className="truncate">{item.label}</span>
+                  <span className="relative z-10 truncate">{item.label}</span>
                   {item.badge ? (
                     <Badge
                       variant="secondary"
-                      className="ml-auto h-5 min-w-5 justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums"
+                      className="relative z-10 ml-auto h-5 min-w-5 justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums"
                     >
                       {pendingCount}
                     </Badge>
@@ -137,7 +146,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarInner({ onNavigate, scope }: { onNavigate?: () => void; scope: string }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2.5 px-6 py-5">
@@ -156,7 +165,7 @@ function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
         </ButtonLink>
       </div>
       <div className="flex-1 overflow-y-auto pb-4 thin-scroll">
-        <NavLinks onNavigate={onNavigate} />
+        <NavLinks onNavigate={onNavigate} scope={scope} />
       </div>
       <div className="border-t border-sidebar-border px-4 py-3">
         <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
@@ -280,7 +289,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-dvh">
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 border-r border-sidebar-border bg-sidebar lg:block">
-        <SidebarInner />
+        <SidebarInner scope="desktop" />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col lg:pl-60">
@@ -294,7 +303,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
             </SheetTrigger>
             <SheetContent side="left" className="w-64 bg-sidebar p-0">
               <SheetTitle className="sr-only">Navigation</SheetTitle>
-              <SidebarInner onNavigate={() => setSheetOpen(false)} />
+              <SidebarInner onNavigate={() => setSheetOpen(false)} scope="mobile" />
             </SheetContent>
           </Sheet>
 
@@ -364,7 +373,9 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1">{children}</main>
+        <main className="flex-1">
+          <PageTransition>{children}</PageTransition>
+        </main>
       </div>
 
       <CommandPalette open={cmdOpen} setOpen={setCmdOpen} />

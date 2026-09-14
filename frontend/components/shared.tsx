@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 import { ArrowDownRight, ArrowUpRight, Minus, SearchX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -117,6 +119,14 @@ export function ConfidenceMeter({
   const pct = Math.round(value * 100);
   const tone =
     value >= 0.8 ? "bg-status-good" : value >= 0.65 ? "bg-status-warning" : "bg-status-serious";
+  // Starts at 0 and fills to `pct` a tick after mount, so the meter draws in
+  // instead of appearing pre-filled — CSS transitions only animate changes,
+  // not the initial value.
+  const [width, setWidth] = React.useState(0);
+  React.useEffect(() => {
+    const raf = requestAnimationFrame(() => setWidth(pct));
+    return () => cancelAnimationFrame(raf);
+  }, [pct]);
   return (
     <Tooltip>
       <TooltipTrigger
@@ -124,8 +134,8 @@ export function ConfidenceMeter({
       >
         <span className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
           <span
-            className={cn("block h-full rounded-full transition-all", tone)}
-            style={{ width: `${pct}%` }}
+            className={cn("block h-full rounded-full transition-[width] duration-700 ease-out", tone)}
+            style={{ width: `${width}%` }}
           />
         </span>
         <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
@@ -153,7 +163,7 @@ export function KpiCard({
   footer,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   delta?: number;
   deltaLabel?: string;
   positiveIsGood?: boolean;
@@ -162,7 +172,7 @@ export function KpiCard({
 }) {
   const good = delta !== undefined && (positiveIsGood ? delta >= 0 : delta <= 0);
   return (
-    <Card className="gap-0 py-0">
+    <Card className="gap-0 py-0 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md">
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[12.5px] font-medium text-muted-foreground">{label}</p>

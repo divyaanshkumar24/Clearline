@@ -82,7 +82,7 @@ export function RiskTrendChart({ height = 240 }: { height?: number }) {
         <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--muted)", opacity: 0.5 }} />
         {(["low", "medium", "high", "critical"] as RiskTier[]).map((tier, i, arr) => (
           <Bar
-            isAnimationActive={false}
+            isAnimationActive animationDuration={800} animationEasing="ease-out"
             key={tier}
             dataKey={tier}
             name={TIER_META[tier].label}
@@ -134,7 +134,7 @@ export function ComplianceRateChart({ height = 240 }: { height?: number }) {
           }}
         />
         <Area
-            isAnimationActive={false}
+            isAnimationActive animationDuration={800} animationEasing="ease-out"
           type="monotone"
           dataKey="complianceRate"
           name="Compliance rate"
@@ -160,7 +160,7 @@ export function RiskDonut({ height = 200 }: { height?: number }) {
         <PieChart>
           <Tooltip content={<ChartTooltip />} />
           <Pie
-            isAnimationActive={false}
+            isAnimationActive animationDuration={800} animationEasing="ease-out"
             data={RISK_DISTRIBUTION.map((d) => ({
               name: TIER_META[d.tier].label,
               value: d.count,
@@ -205,8 +205,8 @@ export function ViolationsChart({ height = 260 }: { height?: number }) {
           content={<ChartTooltip />}
           cursor={{ fill: "var(--muted)", opacity: 0.5 }}
         />
-        <Bar isAnimationActive={false} dataKey="Fails" stackId="v" fill="var(--status-critical)" stroke="var(--card)" strokeWidth={1} />
-        <Bar isAnimationActive={false} dataKey="Flags" stackId="v" fill="var(--status-warning)" stroke="var(--card)" strokeWidth={1} radius={[0, 3, 3, 0]} />
+        <Bar isAnimationActive animationDuration={800} animationEasing="ease-out" dataKey="Fails" stackId="v" fill="var(--status-critical)" stroke="var(--card)" strokeWidth={1} />
+        <Bar isAnimationActive animationDuration={800} animationEasing="ease-out" dataKey="Flags" stackId="v" fill="var(--status-warning)" stroke="var(--card)" strokeWidth={1} radius={[0, 3, 3, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -227,7 +227,7 @@ export function AgreementChart({ height = 260 }: { height?: number }) {
         <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={44} />
         <Tooltip content={<ChartTooltip formatter={(v) => `${v}%`} />} cursor={{ fill: "var(--muted)", opacity: 0.5 }} />
         <ReferenceLine x={90} stroke="var(--axis-ink)" strokeDasharray="4 4" />
-        <Bar isAnimationActive={false} dataKey="Agreement" fill="var(--chart-1)" radius={[0, 3, 3, 0]}>
+        <Bar isAnimationActive animationDuration={800} animationEasing="ease-out" dataKey="Agreement" fill="var(--chart-1)" radius={[0, 3, 3, 0]}>
           {data.map((d) => (
             <Cell
               key={d.name}
@@ -251,7 +251,7 @@ export function CoachingTrendChart({ height = 240 }: { height?: number }) {
         <YAxis tickLine={false} axisLine={false} />
         <Tooltip content={<ChartTooltip />} cursor={{ stroke: "var(--axis-ink)", strokeDasharray: "3 3" }} />
         <Line
-            isAnimationActive={false}
+            isAnimationActive animationDuration={800} animationEasing="ease-out"
           type="monotone"
           dataKey="findingsPerCall"
           name="Findings / call"
@@ -262,7 +262,7 @@ export function CoachingTrendChart({ height = 240 }: { height?: number }) {
           activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--card)" }}
         />
         <Line
-            isAnimationActive={false}
+            isAnimationActive animationDuration={800} animationEasing="ease-out"
           type="monotone"
           dataKey="interruptionsPerCall"
           name="Interruptions / call"
@@ -287,8 +287,8 @@ export function CalibrationChart({ height = 240 }: { height?: number }) {
         <XAxis dataKey="bucket" tickLine={false} axisLine={false} dy={4} />
         <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} tickLine={false} axisLine={false} />
         <Tooltip content={<ChartTooltip formatter={(v) => `${v}%`} />} cursor={{ fill: "var(--muted)", opacity: 0.5 }} />
-        <Bar isAnimationActive={false} dataKey="stated" name="Stated confidence" fill="var(--chart-1)" radius={[3, 3, 0, 0]} />
-        <Bar isAnimationActive={false} dataKey="observed" name="Observed accuracy" fill="var(--chart-2)" radius={[3, 3, 0, 0]} />
+        <Bar isAnimationActive animationDuration={800} animationEasing="ease-out" dataKey="stated" name="Stated confidence" fill="var(--chart-1)" radius={[3, 3, 0, 0]} />
+        <Bar isAnimationActive animationDuration={800} animationEasing="ease-out" dataKey="observed" name="Observed accuracy" fill="var(--chart-2)" radius={[3, 3, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

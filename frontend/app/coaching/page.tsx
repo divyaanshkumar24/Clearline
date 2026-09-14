@@ -22,6 +22,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { CoachingTrendChart, ChartLegend } from "@/components/charts";
 import { KpiCard, PageHeader, RepAvatar } from "@/components/shared";
+import { AnimatedNumber } from "@/components/animated-number";
 import { Reveal, Stagger } from "@/components/motion";
 import { CALLS, REPRESENTATIVES } from "@/lib/mock-data";
 import { coachingByType } from "@/lib/derived";
@@ -95,25 +96,25 @@ function AdminCoaching() {
       <Stagger className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
           label="Avg talk ratio (rep)"
-          value={fmtPct(avgTalk)}
+          value={<AnimatedNumber value={avgTalk} format={(n) => fmtPct(n)} />}
           deltaLabel="guideline ≤ 65%"
           icon={<MicVocal className="size-4" />}
         />
         <KpiCard
           label="Interruptions / call"
-          value={avgInterruptions.toFixed(1)}
+          value={<AnimatedNumber value={avgInterruptions} format={(n) => n.toFixed(1)} />}
           deltaLabel="from diarization timestamps"
           icon={<Ear className="size-4" />}
         />
         <KpiCard
           label="Longest monologue (avg)"
-          value={fmtDuration(Math.round(avgMonologue))}
+          value={<AnimatedNumber value={avgMonologue} format={(n) => fmtDuration(Math.round(n))} />}
           deltaLabel="target under 2:30"
           icon={<Timer className="size-4" />}
         />
         <KpiCard
           label="Discovery questions / call"
-          value={avgDiscovery.toFixed(1)}
+          value={<AnimatedNumber value={avgDiscovery} format={(n) => n.toFixed(1)} />}
           deltaLabel="open questions asked"
           icon={<MessageCircleQuestion className="size-4" />}
         />

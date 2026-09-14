@@ -60,7 +60,11 @@ Next.js (App Router) · React · TypeScript · Tailwind CSS v4 · shadcn/ui (Bas
 - This shadcn install uses **Base UI** primitives: use the `render` prop
   (with `nativeButton={false}` for links), not Radix's `asChild`.
 - Entrance animations are CSS-driven (`tw-animate-css`) so they complete even
-  when rAF is throttled; chart animations are disabled for instant render.
+  when rAF is throttled. Charts animate in on mount/update (Recharts
+  `isAnimationActive`, 800ms ease-out); `components/animated-number.tsx`
+  (Framer Motion) count-ups KPI figures the same way. Route changes get a
+  subtle fade/slide via `components/page-transition.tsx`, and the active
+  sidebar item slides between links with a shared `layoutId`.
 - `lib/audio.ts` — every upload/recording is decoded in the browser and
   re-encoded as 16 kHz PCM WAV, because the backend's `soundfile` can't read
   WebM/Opus or M4A. Channel count is preserved for uploads: a stereo file keeps
