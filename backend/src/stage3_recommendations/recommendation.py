@@ -21,12 +21,27 @@ load_dotenv()
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
 # NVIDIA NIM hosts several Nemotron variants under the same API, but not every
-# variant is enabled for every account/key — "nvidia/llama-3.1-nemotron-70b-instruct"
-# is listed by client.models.list() yet 404s ("Function ... Not found for account")
-# when actually called under this project's key. Verified working (real API call,
-# including forced tool-calling) as of this writing:
-# "nvidia/llama-3.3-nemotron-super-49b-v1". Swap here if you have a different key/tier.
-MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1"
+# variant is enabled for every account/key, and NVIDIA retires models over time:
+#   - "nvidia/llama-3.1-nemotron-70b-instruct" is listed by client.models.list() yet
+#     404s ("Function ... Not found for account") under this project's key.
+#   - "nvidia/llama-3.3-nemotron-super-49b-v1" returned 410 Gone (end of life
+#     2026-08-26).
+# "nvidia/nemotron-3-super-120b-a12b" is verified working (real API call, including
+# forced tool-calling, ~5s). Override without a code change via NVIDIA_MODEL in .env
+# — if a call fails with 404/410, list what your key can use with
+# `OpenAI(base_url=NVIDIA_BASE_URL, api_key=...).models.list()` and pick a successor.
+MODEL = os.environ.get("NVIDIA_MODEL") or "nvidia/nemotron-3-super-120b-a12b"
+
+# Nemotron 3 is a reasoning model: left on, it spends most of max_tokens on hidden
+# `reasoning_content` and can finish with finish_reason="length" before ever emitting
+# the forced tool call (reproduced: compliance scoring at max_tokens=3000 returned no
+# tool call; with thinking on it needed ~4000 tokens and ~68s even for a short call).
+# Both of our calls are structured extraction against a fixed schema, which doesn't
+# need chain-of-thought, so thinking is switched off — same results in ~7-18s.
+NO_THINKING_EXTRA_BODY = {
+    "chat_template_kwargs": {"enable_thinking": False},
+    "reasoning_budget": 0,
+}
 
 SYSTEM_PROMPT = (
     "You are a call-quality coaching assistant analyzing a compliance call between "
@@ -136,6 +151,7 @@ def generate_recommendation(
                 tool_choice={"type": "function", "function": {"name": "submit_call_analysis"}},
                 temperature=0.2,
                 max_tokens=1024,
+                extra_body=NO_THINKING_EXTRA_BODY,
             )
             message = response.choices[0].message
 

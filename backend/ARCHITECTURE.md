@@ -112,7 +112,7 @@ values (Part C), plus the full transcript (Parts D/F):
    every shift is flat/positive.
 4. **`recommendation.py`** — sends the full speaker-tagged transcript, the
    sentiment trajectory, the emotion tags, and the pivot point to an
-   **NVIDIA NIM-hosted Nemotron model** (`nvidia/llama-3.3-nemotron-super-49b-v1`
+   **NVIDIA NIM-hosted Nemotron model** (`nvidia/nemotron-3-super-120b-a12b`
    by default, `NVIDIA_API_KEY` from `.env`) via NVIDIA's OpenAI-compatible
    chat completions API, forcing a `submit_call_analysis` tool/function call
    so the reply is schema-conforming JSON rather than parsed free text (a
@@ -140,7 +140,7 @@ values (Part C), plus the full transcript (Parts D/F):
 
 **Models:** `cardiffnlp/twitter-roberta-base-sentiment-latest`,
 `SamLowe/roberta-base-go_emotions` (both local, no API key), `ruptures` (pure
-algorithm, no model), `nvidia/llama-3.3-nemotron-super-49b-v1` (via the
+algorithm, no model), `nvidia/nemotron-3-super-120b-a12b` (via the
 `openai` SDK pointed at NVIDIA's OpenAI-compatible endpoint, requires
 `NVIDIA_API_KEY`) for both the recommendation and compliance-scoring calls.
 
@@ -203,11 +203,17 @@ Anthropic/Claude dependency anywhere in this project anymore. `NVIDIA_API_KEY`
 is required for both to work; ASR (Stage 1) and diarization (Stage 2) are
 unaffected and keep using local open-source models regardless.
 
-Note: `nvidia/llama-3.1-nemotron-70b-instruct` — a natural first choice, and
-what `NVIDIA_MODEL`/`MODEL` was originally set to — is listed by NVIDIA's
-`models.list()` endpoint but returns a 404 ("Function ... Not found for
-account") when actually called under the key configured for this project.
-`nvidia/llama-3.3-nemotron-super-49b-v1` is verified working (real calls,
-including forced tool-calling) and is the current default; if you have a
-different key/tier, re-verify before assuming any listed model actually
-works.
+Model availability is the fragile part of this stack. NVIDIA retires models
+and enables them per account, so a model that is *listed* by `models.list()`
+may still fail when called:
+
+- `nvidia/llama-3.1-nemotron-70b-instruct` returned 404 ("Function ... Not
+  found for account") under this project's key.
+- `nvidia/llama-3.3-nemotron-super-49b-v1` returned **410 Gone** — end of life
+  2026-08-26.
+- `nvidia/nemotron-3-super-120b-a12b` is the current default, verified with real
+  calls including forced tool-calling (~5s).
+
+Set `NVIDIA_MODEL` in `.env` to override the default without a code change. If
+calls start failing with 404/410, list what your key can use, then re-verify
+forced tool-calling on the replacement before relying on it.

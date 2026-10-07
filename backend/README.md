@@ -221,7 +221,7 @@ frontend can consume this JSON with no transformation layer.
 - `generate_recommendation()` (`recommendation.py`) sends the full
   speaker-tagged transcript + sentiment trajectory + emotion tags + pivot
   point to an NVIDIA NIM-hosted Nemotron model
-  (`nvidia/llama-3.3-nemotron-super-49b-v1` by default, `NVIDIA_API_KEY`
+  (`nvidia/nemotron-3-super-120b-a12b` by default, `NVIDIA_API_KEY`
   from `.env`) via NVIDIA's OpenAI-compatible chat completions API, forcing
   a `submit_call_analysis` tool/function call so the reply is
   schema-conforming JSON rather than parsed free text (if the model ignores

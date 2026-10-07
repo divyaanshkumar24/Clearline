@@ -30,7 +30,7 @@ from typing import Dict, List, Optional, Tuple
 
 import openai
 
-from .recommendation import MODEL, _format_transcript, _get_client
+from .recommendation import MODEL, NO_THINKING_EXTRA_BODY, _format_transcript, _get_client
 
 COMPLIANCE_CRITERIA = [
     {
@@ -283,6 +283,7 @@ def generate_compliance_scoring(
                 tool_choice={"type": "function", "function": {"name": "submit_compliance_review"}},
                 temperature=0.2,
                 max_tokens=3000,
+                extra_body=NO_THINKING_EXTRA_BODY,
             )
             message = response.choices[0].message
 

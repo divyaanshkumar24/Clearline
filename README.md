@@ -39,5 +39,8 @@ cp .env.local.example .env.local   # BACKEND_API_URL defaults to http://localhos
 npm run dev   # http://localhost:3000
 ```
 
+> `backend/.env` holds real API keys and is gitignored — never commit it. Get your own keys
+> (links in `backend/.env.example`) or ask the project owner to share theirs privately.
+
 See `backend/README.md` and `backend/ARCHITECTURE.md` for pipeline details,
 and `frontend/README.md` for the frontend's screens and stack.

@@ -261,3 +261,48 @@ def test_result_for_unknown_call_id():
     client = TestClient(api.app)
     response = client.get("/calls/does-not-exist")
     assert response.status_code == 404
+
+
+def test_concurrent_jobs_never_run_the_pipeline_at_the_same_time(monkeypatch):
+    """Regression: two overlapping jobs crashed the whole server (the shared Silero VAD
+    model isn't thread-safe), so _process_call must serialize pipeline runs."""
+    import threading
+
+    active = 0
+    max_active = 0
+    guard = threading.Lock()
+
+    def fake_pipeline(audio_path, dual_channel=False, on_stage=None):
+        nonlocal active, max_active
+        with guard:
+            active += 1
+            max_active = max(max_active, active)
+        time.sleep(0.2)
+        with guard:
+            active -= 1
+        return {"call_id": Path(audio_path).stem}
+
+    monkeypatch.setattr(api, "run_pipeline", fake_pipeline)
+    monkeypatch.setattr(api, "_persist_job", lambda call_id: None)
+
+    ids = ["lock-test-a", "lock-test-b", "lock-test-c"]
+    for call_id in ids:
+        api.JOBS[call_id] = {
+            "stage": "queued", "progress_pct": 0, "result": None, "error": None,
+            "created_at": time.time(), "stage_timings": {},
+        }
+    try:
+        threads = [
+            threading.Thread(target=api._process_call, args=(call_id, Path(f"{call_id}.wav"), False))
+            for call_id in ids
+        ]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join(timeout=10)
+
+        assert max_active == 1
+        assert all(api.JOBS[call_id]["stage"] == "done" for call_id in ids)
+    finally:
+        for call_id in ids:
+            api.JOBS.pop(call_id, None)

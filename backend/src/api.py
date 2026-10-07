@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import shutil
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -53,6 +54,15 @@ STAGE_PROGRESS = {
 
 # call_id -> {"stage", "progress_pct", "result", "error", "created_at", "stage_timings"}
 JOBS: Dict[str, Dict] = {}
+
+# Only one pipeline run at a time. FastAPI runs each background task in its own
+# worker thread, and the pipeline's models are process-wide singletons — notably the
+# Silero VAD TorchScript module, which is not thread-safe. Two overlapping jobs
+# corrupt its memory ("pointer being freed was not allocated") and SIGABRT the whole
+# server, taking every other user's job down with it (reproduced by uploading two
+# calls at once). The work is CPU-bound anyway, so parallel jobs wouldn't finish
+# sooner; a job that has to wait just sits in the "queued" stage until its turn.
+_PIPELINE_LOCK = threading.Lock()
 
 
 def _persist_job(call_id: str) -> None:
@@ -131,7 +141,8 @@ def _process_call(call_id: str, audio_path: Path, dual_channel: bool) -> None:
         JOBS[call_id]["progress_pct"] = STAGE_PROGRESS.get(stage, JOBS[call_id]["progress_pct"])
 
     try:
-        result = run_pipeline(str(audio_path), dual_channel=dual_channel, on_stage=on_stage)
+        with _PIPELINE_LOCK:
+            result = run_pipeline(str(audio_path), dual_channel=dual_channel, on_stage=on_stage)
         JOBS[call_id]["stage"] = "done"
         JOBS[call_id]["progress_pct"] = 100
         JOBS[call_id]["result"] = result
