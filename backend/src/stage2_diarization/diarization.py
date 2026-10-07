@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Dict, List
+from typing import Callable, Dict, List, Optional
 
 import numpy as np
 import soundfile as sf
@@ -96,8 +96,41 @@ def _diarize_dual_channel(audio_path: str) -> List[Dict]:
     return turns
 
 
-def diarize_call(audio_path: str, dual_channel: bool = False) -> List[Dict]:
+# pyannote reports progress via a hook(step, artifact, file=, total=, completed=) for its
+# two long steps. These (start, end) bands split the 0-1 range between them; the cheap
+# steps after embeddings (clustering etc.) fill the remainder up to the final 1.0.
+_PYANNOTE_STEP_BANDS = {"segmentation": (0.0, 0.45), "embeddings": (0.45, 0.95)}
+
+
+def _make_progress_hook(on_progress: Callable[[float], None]) -> Callable:
+    last = [0.0]
+
+    def hook(step_name, step_artifact=None, file=None, total=None, completed=None):
+        # Progress reporting must never be able to break diarization itself.
+        try:
+            band = _PYANNOTE_STEP_BANDS.get(step_name)
+            if band is None or not total or completed is None:
+                return
+            fraction = band[0] + (band[1] - band[0]) * min(1.0, completed / total)
+            if fraction - last[0] >= 0.01:
+                last[0] = fraction
+                on_progress(fraction)
+        except Exception:  # noqa: BLE001
+            pass
+
+    return hook
+
+
+def diarize_call(
+    audio_path: str,
+    dual_channel: bool = False,
+    on_progress: Optional[Callable[[float], None]] = None,
+) -> List[Dict]:
     """Return speaker turns for a call recording as [{"start", "end", "speaker"}, ...].
+
+    on_progress, if given, is called with a 0.0-1.0 fraction as pyannote works through
+    its segmentation and embedding steps (not used in dual_channel mode, which is
+    near-instant).
 
     In dual_channel mode, channel 0 is assumed to always be the agent and channel 1
     the client — diarization is skipped entirely, and turns come straight from
@@ -107,7 +140,10 @@ def diarize_call(audio_path: str, dual_channel: bool = False) -> List[Dict]:
         return _diarize_dual_channel(audio_path)
 
     pipeline = _load_diarization_pipeline()
-    output = pipeline(str(Path(audio_path)))
+    if on_progress is not None:
+        output = pipeline(str(Path(audio_path)), hook=_make_progress_hook(on_progress))
+    else:
+        output = pipeline(str(Path(audio_path)))
     # pyannote.audio 4.x's SpeakerDiarization pipeline returns a DiarizeOutput
     # dataclass rather than a bare Annotation; exclusive_speaker_diarization has
     # overlapping speech turns resolved — exactly what merging with an ASR

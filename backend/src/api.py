@@ -4,7 +4,6 @@ Run with:
     uvicorn src.api:app --reload
 """
 
-import inspect
 import json
 import logging
 import os
@@ -20,7 +19,7 @@ from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadF
 from fastapi.middleware.cors import CORSMiddleware
 
 from .pipeline import run_pipeline
-from .stage1_asr.transcribe import transcribe_call
+from .stage1_asr.transcribe import default_model_size
 from .stage2_diarization.diarization import DIARIZATION_MODEL
 from .stage3_recommendations.recommendation import MODEL as RECOMMENDATION_MODEL
 
@@ -43,7 +42,8 @@ CALLS_DIR = PROJECT_ROOT / "calls"
 JOB_TIMEOUT_SEC = float(os.environ.get("JOB_TIMEOUT_SEC", 45 * 60))
 
 # Progress reported at the *start* of each stage — i.e. this much of the call
-# is already done by the time that stage begins.
+# is already done by the time that stage begins. The two slow CPU stages also report
+# finer progress while they run (see STAGE_END and on_progress below).
 STAGE_PROGRESS = {
     "queued": 0,
     "transcribing": 0,
@@ -51,6 +51,11 @@ STAGE_PROGRESS = {
     "analyzing": 70,
     "done": 100,
 }
+
+# Where each progress-reporting stage's slice of the bar ends (it starts at its
+# STAGE_PROGRESS value). A stage's in-progress value is held just under this so the
+# bar reaches it exactly when the next stage begins, never before.
+STAGE_END = {"transcribing": 40, "diarizing": 70}
 
 # call_id -> {"stage", "progress_pct", "result", "error", "created_at", "stage_timings"}
 JOBS: Dict[str, Dict] = {}
@@ -140,9 +145,24 @@ def _process_call(call_id: str, audio_path: Path, dual_channel: bool) -> None:
         JOBS[call_id]["_stage_entered_at"] = now
         JOBS[call_id]["progress_pct"] = STAGE_PROGRESS.get(stage, JOBS[call_id]["progress_pct"])
 
+    def on_progress(stage: str, fraction: float) -> None:
+        job = JOBS[call_id]
+        if job["stage"] != stage or stage not in STAGE_END:
+            return
+        start, end = STAGE_PROGRESS[stage], STAGE_END[stage]
+        pct = min(start + int((end - start) * max(0.0, min(1.0, fraction))), end - 1)
+        # Monotonic: never let the bar move backwards.
+        if pct > job["progress_pct"]:
+            job["progress_pct"] = pct
+
     try:
         with _PIPELINE_LOCK:
-            result = run_pipeline(str(audio_path), dual_channel=dual_channel, on_stage=on_stage)
+            result = run_pipeline(
+                str(audio_path),
+                dual_channel=dual_channel,
+                on_stage=on_stage,
+                on_progress=on_progress,
+            )
         JOBS[call_id]["stage"] = "done"
         JOBS[call_id]["progress_pct"] = 100
         JOBS[call_id]["result"] = result
@@ -233,7 +253,7 @@ async def get_pipeline_info() -> Dict:
     """Which models are actually powering each stage right now — read from the
     real code/env rather than hardcoded, so this stays accurate if the model
     choice changes later."""
-    stt_model_size = inspect.signature(transcribe_call).parameters["model_size"].default
+    stt_model_size = default_model_size()
     return {
         "stt": {"engine": "faster-whisper", "model": stt_model_size},
         "diarization": {"engine": "pyannote.audio", "model": DIARIZATION_MODEL},

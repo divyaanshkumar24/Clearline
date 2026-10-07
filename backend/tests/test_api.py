@@ -272,7 +272,7 @@ def test_concurrent_jobs_never_run_the_pipeline_at_the_same_time(monkeypatch):
     max_active = 0
     guard = threading.Lock()
 
-    def fake_pipeline(audio_path, dual_channel=False, on_stage=None):
+    def fake_pipeline(audio_path, dual_channel=False, on_stage=None, on_progress=None):
         nonlocal active, max_active
         with guard:
             active += 1
@@ -306,3 +306,37 @@ def test_concurrent_jobs_never_run_the_pipeline_at_the_same_time(monkeypatch):
     finally:
         for call_id in ids:
             api.JOBS.pop(call_id, None)
+
+
+def test_progress_moves_within_a_stage_and_never_goes_backwards(monkeypatch):
+    """The bar used to sit at 0% for the whole (slowest) transcribing stage; the
+    pipeline now reports fractions and the API maps them onto each stage's slice."""
+    seen = []
+
+    def fake_pipeline(audio_path, dual_channel=False, on_stage=None, on_progress=None):
+        on_stage("transcribing")
+        for fraction in (0.1, 0.5, 0.3, 1.0):  # 0.3 is a regression: must be ignored
+            on_progress("transcribing", fraction)
+            seen.append(api.JOBS["progress-test"]["progress_pct"])
+        on_progress("diarizing", 0.9)  # wrong stage for now: must be ignored
+        seen.append(api.JOBS["progress-test"]["progress_pct"])
+        on_stage("diarizing")
+        on_progress("diarizing", 0.5)
+        seen.append(api.JOBS["progress-test"]["progress_pct"])
+        on_stage("analyzing")
+        seen.append(api.JOBS["progress-test"]["progress_pct"])
+        return {"call_id": "progress-test"}
+
+    monkeypatch.setattr(api, "run_pipeline", fake_pipeline)
+    monkeypatch.setattr(api, "_persist_job", lambda call_id: None)
+    api.JOBS["progress-test"] = {
+        "stage": "queued", "progress_pct": 0, "result": None, "error": None,
+        "created_at": time.time(), "stage_timings": {},
+    }
+    try:
+        api._process_call("progress-test", Path("progress-test.wav"), False)
+        # transcribing slice is 0-40 and held below 40; diarizing is 40-70.
+        assert seen == [4, 20, 20, 39, 39, 55, 70]
+        assert api.JOBS["progress-test"]["progress_pct"] == 100
+    finally:
+        api.JOBS.pop("progress-test", None)

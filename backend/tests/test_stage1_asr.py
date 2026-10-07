@@ -35,3 +35,42 @@ def test_transcribe_call_on_sample_audio():
         assert set(segment.keys()) == {"start", "end", "text"}
         assert segment["start"] < segment["end"]
         assert segment["text"].strip() != ""
+
+
+def test_transcribe_call_reports_progress_and_honors_env_model_size(monkeypatch):
+    """Progress is duration-weighted per speech region and ends at 1.0; model size
+    comes from WHISPER_MODEL_SIZE when the caller doesn't pass one."""
+    import numpy as np
+
+    from src.stage1_asr import transcribe as T
+
+    class FakeSeg:
+        def __init__(self, text):
+            self.text, self.start, self.end = text, 0.0, 1.0
+
+    class FakeModel:
+        def transcribe(self, chunk, **kwargs):
+            return [FakeSeg("hello")], None
+
+    chosen = {}
+
+    def fake_get_model(model_size, device, compute_type):
+        chosen["size"] = model_size
+        return FakeModel()
+
+    monkeypatch.setattr(T, "load_audio_16k_mono", lambda *a, **kw: np.zeros(16000 * 10, dtype=np.float32))
+    # one 1s region and one 3s region -> progress should be 0.25 then 1.0
+    monkeypatch.setattr(T, "get_speech_segments", lambda *a, **kw: [{"start": 0.0, "end": 1.0}, {"start": 2.0, "end": 5.0}])
+    monkeypatch.setattr(T, "_get_whisper_model", fake_get_model)
+    monkeypatch.setenv("WHISPER_MODEL_SIZE", "small")
+
+    updates = []
+    result = T.transcribe_call("x.wav", on_progress=updates.append)
+
+    assert updates == [0.25, 1.0]
+    assert chosen["size"] == "small"
+    assert T.default_model_size() == "small"
+    assert len(result["segments"]) == 2
+
+    monkeypatch.delenv("WHISPER_MODEL_SIZE")
+    assert T.default_model_size() == "medium"

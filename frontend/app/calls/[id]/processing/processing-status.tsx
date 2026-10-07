@@ -138,7 +138,7 @@ export function ProcessingStatus({ callId }: { callId: string }) {
     <div className="mx-auto max-w-2xl px-4 py-6 md:px-6 lg:px-8">
       <PageHeader
         title="Analyzing your call"
-        description="This usually takes a minute or two. The call will appear in Calls once it's done."
+        description="Longer calls take longer — on a laptop CPU, expect a few minutes for a one-minute recording. The call will appear in Calls once it's done."
       />
       <Reveal>
         <Card className="gap-0 py-0">

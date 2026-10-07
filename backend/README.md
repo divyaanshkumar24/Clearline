@@ -294,10 +294,23 @@ a server restart and won't work across multiple worker processes.
 
 `run_pipeline()` (`pipeline.py`) takes an optional `on_stage(stage: str)`
 callback, invoked as `"transcribing"` → `"diarizing"` → `"analyzing"` →
-`"done"` starts; `api.py` uses it to keep each job's `stage`/`progress_pct`
-current. `progress_pct` is a fixed value per stage-start
-(`transcribing`→0, `diarizing`→40, `analyzing`→70, `done`→100), not a
-continuous measurement within a stage.
+`"done"` starts, plus an optional `on_progress(stage, fraction)` callback fired
+*while* the two slow CPU stages run. `api.py` uses both to keep each job's
+`stage`/`progress_pct` current. Each stage owns a slice of the 0–100 bar:
+`transcribing` 0→40 (by seconds of speech transcribed), `diarizing` 40→70 (via
+pyannote's segmentation/embedding progress hook), `analyzing` 70→100 (a single
+jump when it finishes — the LLM calls have no finer granularity). In-stage
+progress is held just under the slice's end so the bar reaches the boundary
+exactly when the next stage starts, and it never moves backwards. Dual-channel
+mode skips diarization, so that slice passes almost instantly.
+
+**Speed vs accuracy:** transcription uses Whisper `medium` by default. Set
+`WHISPER_MODEL_SIZE=small` (or `base`/`tiny`) in `.env` for much faster runs —
+measured on a 56s two-speaker call on an Apple-silicon CPU, `small` transcribed
+in ~21s versus ~67s for `medium` (≈3x) with a near-identical transcript, taking
+the whole run from ~151s to ~96s. Diarization (~65s) is unaffected by the Whisper
+size. The first run with a new size downloads its weights, which inflates that
+one run's time. `GET /pipeline-info` reports the size currently in use.
 
 **NVIDIA API key:** `NVIDIA_API_KEY` is required for Stage 3's recommendation
 call — there is no other LLM provider wired in. ASR (Stage 1) and diarization

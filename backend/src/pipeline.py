@@ -29,6 +29,7 @@ def run_pipeline(
     audio_path: str,
     dual_channel: bool = False,
     on_stage: Optional[Callable[[str], None]] = None,
+    on_progress: Optional[Callable[[str, float], None]] = None,
 ) -> Dict:
     """Run the full Clearline pipeline (Stage 1 -> Stage 2 -> Stage 3) on a call recording.
 
@@ -39,6 +40,10 @@ def run_pipeline(
             or "done" as each stage starts (or the pipeline finishes) — lets a caller (e.g.
             a web API) surface progress without this function knowing anything about how
             that progress is reported.
+        on_progress: Optional callback invoked as on_progress(stage, fraction) with the
+            0.0-1.0 completion of the current stage while it runs — currently for
+            "transcribing" and "diarizing", the two slow CPU stages. Stages that can't
+            report finer progress simply jump when the next on_stage fires.
 
     Returns:
         {"call_id", "segments", "sentiment_trajectory", "emotion_tags", "pivot_point",
@@ -51,7 +56,10 @@ def run_pipeline(
 
     _report("transcribing")
     logger.info("Stage 1: transcribing %s", audio_path)
-    asr_result = transcribe_call(audio_path)
+    asr_result = transcribe_call(
+        audio_path,
+        on_progress=(lambda fraction: on_progress("transcribing", fraction)) if on_progress else None,
+    )
 
     if not asr_result["segments"]:
         raise RuntimeError(
@@ -62,7 +70,11 @@ def run_pipeline(
 
     _report("diarizing")
     logger.info("Stage 2: diarizing (dual_channel=%s)", dual_channel)
-    diarization_segments = diarize_call(audio_path, dual_channel=dual_channel)
+    diarization_segments = diarize_call(
+        audio_path,
+        dual_channel=dual_channel,
+        on_progress=(lambda fraction: on_progress("diarizing", fraction)) if on_progress else None,
+    )
     merged = merge_transcript_with_speakers(asr_result["segments"], diarization_segments)
 
     speaker_labels = {seg["speaker"] for seg in merged if seg.get("speaker")}
